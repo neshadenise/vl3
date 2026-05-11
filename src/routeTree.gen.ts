@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as LookbookRouteImport } from './routes/lookbook'
+import { Route as CollectionsRouteImport } from './routes/collections'
 import { Route as ClosetRouteImport } from './routes/closet'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -30,6 +31,11 @@ const LookbookRoute = LookbookRouteImport.update({
   path: '/lookbook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollectionsRoute = CollectionsRouteImport.update({
+  id: '/collections',
+  path: '/collections',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClosetRoute = ClosetRouteImport.update({
   id: '/closet',
   path: '/closet',
@@ -44,6 +50,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/collections': typeof CollectionsRoute
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/collections': typeof CollectionsRoute
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
@@ -59,21 +67,36 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/collections': typeof CollectionsRoute
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/closet' | '/lookbook' | '/models' | '/studio'
+  fullPaths:
+    | '/'
+    | '/closet'
+    | '/collections'
+    | '/lookbook'
+    | '/models'
+    | '/studio'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/closet' | '/lookbook' | '/models' | '/studio'
-  id: '__root__' | '/' | '/closet' | '/lookbook' | '/models' | '/studio'
+  to: '/' | '/closet' | '/collections' | '/lookbook' | '/models' | '/studio'
+  id:
+    | '__root__'
+    | '/'
+    | '/closet'
+    | '/collections'
+    | '/lookbook'
+    | '/models'
+    | '/studio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClosetRoute: typeof ClosetRoute
+  CollectionsRoute: typeof CollectionsRoute
   LookbookRoute: typeof LookbookRoute
   ModelsRoute: typeof ModelsRoute
   StudioRoute: typeof StudioRoute
@@ -102,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LookbookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/collections': {
+      id: '/collections'
+      path: '/collections'
+      fullPath: '/collections'
+      preLoaderRoute: typeof CollectionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/closet': {
       id: '/closet'
       path: '/closet'
@@ -122,6 +152,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClosetRoute: ClosetRoute,
+  CollectionsRoute: CollectionsRoute,
   LookbookRoute: LookbookRoute,
   ModelsRoute: ModelsRoute,
   StudioRoute: StudioRoute,
