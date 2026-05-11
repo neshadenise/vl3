@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as MoodboardsRouteImport } from './routes/moodboards'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as LookbookRouteImport } from './routes/lookbook'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MoodboardsRoute = MoodboardsRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/moodboards': typeof MoodboardsRoute
+  '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/moodboards': typeof MoodboardsRoute
+  '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/moodboards': typeof MoodboardsRoute
+  '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/lookbook'
     | '/models'
     | '/moodboards'
+    | '/settings'
     | '/studio'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/lookbook'
     | '/models'
     | '/moodboards'
+    | '/settings'
     | '/studio'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/lookbook'
     | '/models'
     | '/moodboards'
+    | '/settings'
     | '/studio'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   LookbookRoute: typeof LookbookRoute
   ModelsRoute: typeof ModelsRoute
   MoodboardsRoute: typeof MoodboardsRoute
+  SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
 }
 
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/studio'
       fullPath: '/studio'
       preLoaderRoute: typeof StudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/moodboards': {
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   LookbookRoute: LookbookRoute,
   ModelsRoute: ModelsRoute,
   MoodboardsRoute: MoodboardsRoute,
+  SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
 }
 export const routeTree = rootRouteImport
