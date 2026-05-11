@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ModelsRouteImport } from './routes/models'
+import { Route as LookbookRouteImport } from './routes/lookbook'
 import { Route as ClosetRouteImport } from './routes/closet'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -22,6 +23,11 @@ const StudioRoute = StudioRouteImport.update({
 const ModelsRoute = ModelsRouteImport.update({
   id: '/models',
   path: '/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LookbookRoute = LookbookRouteImport.update({
+  id: '/lookbook',
+  path: '/lookbook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClosetRoute = ClosetRouteImport.update({
@@ -38,12 +44,14 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/models': typeof ModelsRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/closet' | '/models' | '/studio'
+  fullPaths: '/' | '/closet' | '/lookbook' | '/models' | '/studio'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/closet' | '/models' | '/studio'
-  id: '__root__' | '/' | '/closet' | '/models' | '/studio'
+  to: '/' | '/closet' | '/lookbook' | '/models' | '/studio'
+  id: '__root__' | '/' | '/closet' | '/lookbook' | '/models' | '/studio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClosetRoute: typeof ClosetRoute
+  LookbookRoute: typeof LookbookRoute
   ModelsRoute: typeof ModelsRoute
   StudioRoute: typeof StudioRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/models'
       fullPath: '/models'
       preLoaderRoute: typeof ModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lookbook': {
+      id: '/lookbook'
+      path: '/lookbook'
+      fullPath: '/lookbook'
+      preLoaderRoute: typeof LookbookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/closet': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClosetRoute: ClosetRoute,
+  LookbookRoute: LookbookRoute,
   ModelsRoute: ModelsRoute,
   StudioRoute: StudioRoute,
 }
