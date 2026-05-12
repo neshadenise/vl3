@@ -27,14 +27,14 @@ function Dashboard() {
             <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" /> Atelier of one
           </div>
           <h1 className="mt-4 font-display text-4xl md:text-6xl leading-[1.05] text-ink">
-            Style your <span className="text-gradient">muse</span>.<br />Stack the layers. Glow.
+            Generate your <span class="text-gradient">muse</span>.<br />Dress her with AI. Glow.
           </h1>
           <p className="mt-4 max-w-xl text-ink/70">
-            Drop in clothing, build looks on AI fashion dolls, save moodboards. No account needed — your studio lives right here.
+            Prompt a photorealistic fashion model. Tap a piece from your closet — AI dresses the model in it. Restyle with words. No drag, no drop.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link to="/studio" className="inline-flex items-center gap-2 rounded-full bg-glow px-5 py-3 text-sm font-medium text-primary-foreground shadow-glow ring-glow">
-              <Wand2 className="h-4 w-4" /> Open Styling Studio
+            <Link to="/models" className="inline-flex items-center gap-2 rounded-full bg-glow px-5 py-3 text-sm font-medium text-primary-foreground shadow-glow ring-glow">
+              <Sparkles className="h-4 w-4" /> Generate a model
             </Link>
             <Link to="/closet" className="inline-flex items-center gap-2 rounded-full glass px-5 py-3 text-sm font-medium">
               <Plus className="h-4 w-4" /> Add closet items
