@@ -27,14 +27,14 @@ function Dashboard() {
             <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" /> Atelier of one
           </div>
           <h1 className="mt-4 font-display text-4xl md:text-6xl leading-[1.05] text-ink">
-            Style your <span className="text-gradient">muse</span>.<br />Stack the layers. Glow.
+            Generate your <span className="text-gradient">muse</span>.<br />Dress her with AI. Glow.
           </h1>
           <p className="mt-4 max-w-xl text-ink/70">
-            Drop in clothing, build looks on AI fashion dolls, save moodboards. No account needed — your studio lives right here.
+            Prompt a photorealistic fashion model. Tap a piece from your closet — AI dresses the model in it. Restyle with words. No drag, no drop.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link to="/studio" className="inline-flex items-center gap-2 rounded-full bg-glow px-5 py-3 text-sm font-medium text-primary-foreground shadow-glow ring-glow">
-              <Wand2 className="h-4 w-4" /> Open Styling Studio
+            <Link to="/models" className="inline-flex items-center gap-2 rounded-full bg-glow px-5 py-3 text-sm font-medium text-primary-foreground shadow-glow ring-glow">
+              <Sparkles className="h-4 w-4" /> Generate a model
             </Link>
             <Link to="/closet" className="inline-flex items-center gap-2 rounded-full glass px-5 py-3 text-sm font-medium">
               <Plus className="h-4 w-4" /> Add closet items
@@ -64,8 +64,8 @@ function Dashboard() {
 
       <section className="mt-8 grid md:grid-cols-3 gap-4">
         <Card title="1. Build your closet" body="Upload clothes or paste image URLs. Tag, color, organize." to="/closet" cta="Upload items" />
-        <Card title="2. Choose a model" body="Femme, masc, plus, petite, wheelchair, little person — fully inclusive." to="/models" cta="Pick a muse" />
-        <Card title="3. Style the look" body="Drag layers, prompt the vibe, save it to your lookbook." to="/studio" cta="Start styling" />
+        <Card title="2. Generate a model" body="Describe a muse — body, vibe, hair, skin. AI renders her in basic underwear, ready to dress." to="/models" cta="Pick a muse" />
+        <Card title="3. Let AI style" body="Tap a closet piece, AI puts it on. Then prompt: ‘open shirt off the shoulders’." to="/studio" cta="Start styling" />
       </section>
     </AppLayout>
   );

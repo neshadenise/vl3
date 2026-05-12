@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { uploadFile } from "@/lib/storage";
 
 export const Route = createFileRoute("/closet")({
   head: () => ({ meta: [{ title: "Closet · Style Doll Studio" }] }),
@@ -131,11 +132,16 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
 
   const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); };
 
-  const handleFile = (file: File, target: "front" | "back") => {
+  const handleFile = async (file: File, target: "front" | "back") => {
     if (file.size > 8 * 1024 * 1024) { toast.error("Image too large (8MB max)"); return; }
-    const r = new FileReader();
-    r.onload = () => { const url = r.result as string; if (target === "front") setImageUrl(url); else setBackUrl(url); };
-    r.readAsDataURL(file);
+    try {
+      toast.loading("Uploading…", { id: "up" });
+      const url = await uploadFile(file, "closet");
+      toast.success("Uploaded ✦", { id: "up" });
+      if (target === "front") setImageUrl(url); else setBackUrl(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Upload failed", { id: "up" });
+    }
   };
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f, "front"); };
