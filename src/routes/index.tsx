@@ -27,7 +27,7 @@ function Dashboard() {
             <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" /> Atelier of one
           </div>
           <h1 className="mt-4 font-display text-4xl md:text-6xl leading-[1.05] text-ink">
-            Generate your <span class="text-gradient">muse</span>.<br />Dress her with AI. Glow.
+            Generate your <span className="text-gradient">muse</span>.<br />Dress her with AI. Glow.
           </h1>
           <p className="mt-4 max-w-xl text-ink/70">
             Prompt a photorealistic fashion model. Tap a piece from your closet — AI dresses the model in it. Restyle with words. No drag, no drop.
