@@ -64,8 +64,8 @@ function Dashboard() {
 
       <section className="mt-8 grid md:grid-cols-3 gap-4">
         <Card title="1. Build your closet" body="Upload clothes or paste image URLs. Tag, color, organize." to="/closet" cta="Upload items" />
-        <Card title="2. Choose a model" body="Femme, masc, plus, petite, wheelchair, little person — fully inclusive." to="/models" cta="Pick a muse" />
-        <Card title="3. Style the look" body="Drag layers, prompt the vibe, save it to your lookbook." to="/studio" cta="Start styling" />
+        <Card title="2. Generate a model" body="Describe a muse — body, vibe, hair, skin. AI renders her in basic underwear, ready to dress." to="/models" cta="Pick a muse" />
+        <Card title="3. Let AI style" body="Tap a closet piece, AI puts it on. Then prompt: ‘open shirt off the shoulders’." to="/studio" cta="Start styling" />
       </section>
     </AppLayout>
   );
