@@ -16,10 +16,8 @@ export type ClosetItem = {
   id: string;
   name: string;
   category: string;
-  imageUrl: string; // front
+  imageUrl: string;
   backUrl?: string;
-  sideUrl?: string;
-  detailUrl?: string;
   color?: string;
   brand?: string;
   tags: string[];
@@ -29,50 +27,45 @@ export type ClosetItem = {
   createdAt: number;
 };
 
-export type ModelTemplate = {
+export const POSE_PRESETS = [
+  "Standing neutral",
+  "Hands on hips, confident",
+  "Walking toward camera",
+  "Editorial 3/4 turn",
+  "Side profile",
+  "Sitting on stool",
+  "Wheelchair, styled pose",
+  "Dynamic action",
+];
+
+export const MODEL_PROMPT_PRESETS = [
+  "Tall androgynous person, soft freckles, natural curls, warm olive skin",
+  "Curvy femme model, deep brown skin, sleek dark bob, almond eyes",
+  "Plus-size femme, soft round features, strawberry blonde waves, fair freckled skin",
+  "Masc model, athletic build, light brown skin, short faded hair, beard stubble",
+  "Wheelchair user, femme, long auburn hair, porcelain skin, gentle smile",
+  "Petite east-asian femme, jet black bangs, dewy skin, neutral expression",
+  "Elder model with silver pixie cut, warm beige skin, expressive eyes",
+];
+
+export type Model = {
   id: string;
   name: string;
   prompt: string;
-  emoji: string;
-};
-
-export const MODEL_TEMPLATES: ModelTemplate[] = [
-  { id: "f-curvy", name: "Femme · Curvy", prompt: "Femme model, curvy, soft styling", emoji: "✦" },
-  { id: "m-athletic", name: "Masc · Athletic", prompt: "Masc model, athletic build", emoji: "✧" },
-  { id: "andro", name: "Androgynous", prompt: "Androgynous model, neutral pose", emoji: "☾" },
-  { id: "plus", name: "Plus-size", prompt: "Plus-size model, confident stance", emoji: "❀" },
-  { id: "petite", name: "Petite", prompt: "Petite model, soft posture", emoji: "✿" },
-  { id: "tall", name: "Tall", prompt: "Tall model, editorial pose", emoji: "❋" },
-  { id: "wheel", name: "Wheelchair user", prompt: "Wheelchair user model, seated styled pose", emoji: "♿" },
-  { id: "lp", name: "Little person", prompt: "Little person model, achondroplasia proportions, confident pose", emoji: "❖" },
-  { id: "prosth", name: "Prosthetic limb", prompt: "Model with prosthetic limb, dynamic pose", emoji: "✺" },
-  { id: "elder", name: "Elder", prompt: "Elder model, elegant stance", emoji: "❧" },
-  { id: "teen", name: "Teen", prompt: "Teen model, casual pose", emoji: "✦" },
-  { id: "muscle", name: "Muscular", prompt: "Muscular model, strong pose", emoji: "✦" },
-];
-
-export const POSES = [
-  "Standing neutral","Fashion pose","Walking","Hands on hips","Editorial","Streetwear",
-  "Athletic","Sitting","Wheelchair pose","Dynamic action","Side profile","Back-facing","3/4 pose"
-];
-
-export type StudioLayer = {
-  id: string;
-  itemId: string;
-  x: number; y: number;
-  scale: number; rotation: number;
-  visible: boolean; locked: boolean;
+  pose: string;
+  baseImageUrl: string;        // underwear-only original
+  currentImageUrl: string;     // latest edit
+  history: string[];           // for undo (most recent last)
+  wornItemIds: string[];
+  createdAt: number;
 };
 
 export type Look = {
   id: string;
   name: string;
   modelId: string;
-  pose: string;
-  prompt: string;
-  layers: StudioLayer[];
+  imageUrl: string;
   itemIds: string[];
-  thumbnail?: string; // dataURL of canvas snapshot (mock)
   notes?: string;
   createdAt: number;
 };
@@ -86,8 +79,8 @@ export type Collection = {
   createdAt: number;
 };
 
-export type MoodboardPin = { id: string; type: "image" | "note" | "swatch"; url?: string; text?: string; color?: string; x: number; y: number; w: number; h: number; };
-export type Moodboard = { id: string; name: string; pins: MoodboardPin[]; palette: string[]; createdAt: number; };
+export type MoodboardPin = { id: string; type: "image" | "note" | "swatch"; url?: string; text?: string; color?: string; x: number; y: number; w: number; h: number };
+export type Moodboard = { id: string; name: string; pins: MoodboardPin[]; palette: string[]; createdAt: number };
 
 type Theme = "pastel" | "astro";
 
@@ -102,6 +95,14 @@ type State = {
 
   customCategories: string[];
   addCategory: (c: string) => void;
+
+  models: Model[];
+  addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string }) => Model;
+  updateModelImage: (id: string, newUrl: string, addedItemId?: string) => void;
+  resetModel: (id: string) => void;
+  undoModel: (id: string) => void;
+  removeModel: (id: string) => void;
+  renameModel: (id: string, name: string) => void;
 
   looks: Look[];
   saveLook: (l: Omit<Look, "id" | "createdAt">) => Look;
@@ -119,7 +120,7 @@ type State = {
 };
 
 const Ctx = createContext<State | null>(null);
-const KEY = "sds:v1";
+const KEY = "sds:v2";
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -132,6 +133,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("pastel");
   const [items, setItems] = useState<ClosetItem[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
   const [looks, setLooks] = useState<Look[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [moodboards, setMoodboards] = useState<Moodboard[]>([]);
@@ -143,6 +145,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setThemeState(data.theme || "pastel");
       setItems(data.items || []);
       setCustomCategories(data.customCategories || []);
+      setModels(data.models || []);
       setLooks(data.looks || []);
       setCollections(data.collections || []);
       setMoodboards(data.moodboards || []);
@@ -152,8 +155,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(KEY, JSON.stringify({ theme, items, customCategories, looks, collections, moodboards }));
-  }, [hydrated, theme, items, customCategories, looks, collections, moodboards]);
+    localStorage.setItem(KEY, JSON.stringify({ theme, items, customCategories, models, looks, collections, moodboards }));
+  }, [hydrated, theme, items, customCategories, models, looks, collections, moodboards]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -169,9 +172,39 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   };
   const updateItem: State["updateItem"] = (id, patch) =>
     setItems((p) => p.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const removeItem: State["removeItem"] = (id) => setItems((p) => p.filter((x) => x.id !== id));
-
+  const removeItem = (id: string) => setItems((p) => p.filter((x) => x.id !== id));
   const addCategory = (c: string) => setCustomCategories((p) => (p.includes(c) ? p : [...p, c]));
+
+  const addModel: State["addModel"] = (m) => {
+    const model: Model = {
+      ...m,
+      id: uid(),
+      createdAt: Date.now(),
+      currentImageUrl: m.currentImageUrl || m.baseImageUrl,
+      history: [],
+      wornItemIds: [],
+    };
+    setModels((p) => [model, ...p]);
+    return model;
+  };
+  const updateModelImage: State["updateModelImage"] = (id, newUrl, addedItemId) =>
+    setModels((p) => p.map((m) => m.id === id ? {
+      ...m,
+      history: [...m.history, m.currentImageUrl],
+      currentImageUrl: newUrl,
+      wornItemIds: addedItemId && !m.wornItemIds.includes(addedItemId) ? [...m.wornItemIds, addedItemId] : m.wornItemIds,
+    } : m));
+  const resetModel = (id: string) =>
+    setModels((p) => p.map((m) => m.id === id ? { ...m, currentImageUrl: m.baseImageUrl, history: [], wornItemIds: [] } : m));
+  const undoModel = (id: string) =>
+    setModels((p) => p.map((m) => {
+      if (m.id !== id || m.history.length === 0) return m;
+      const prev = m.history[m.history.length - 1];
+      return { ...m, currentImageUrl: prev, history: m.history.slice(0, -1) };
+    }));
+  const removeModel = (id: string) => setModels((p) => p.filter((m) => m.id !== id));
+  const renameModel = (id: string, name: string) =>
+    setModels((p) => p.map((m) => m.id === id ? { ...m, name } : m));
 
   const saveLook: State["saveLook"] = (l) => {
     const look: Look = { ...l, id: uid(), createdAt: Date.now() };
@@ -203,6 +236,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       theme, setTheme,
       items, addItem, updateItem, removeItem,
       customCategories, addCategory,
+      models, addModel, updateModelImage, resetModel, undoModel, removeModel, renameModel,
       looks, saveLook, removeLook,
       collections, addCollection, addLookToCollection, removeCollection,
       moodboards, addMoodboard, updateMoodboard, removeMoodboard,
