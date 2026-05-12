@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { uploadFile } from "@/lib/storage";
 
 export const Route = createFileRoute("/closet")({
   head: () => ({ meta: [{ title: "Closet · Style Doll Studio" }] }),
