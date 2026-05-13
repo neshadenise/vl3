@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { generateModel } from "@/lib/ai.functions";
 import { uploadDataUrl } from "@/lib/storage";
 
-export const Route = createFileRoute("/models")({
+export const Route = createFileRoute("/_authenticated/models")({
   head: () => ({ meta: [{ title: "Models · Virtual Lookbook" }] }),
   component: ModelsPage,
 });

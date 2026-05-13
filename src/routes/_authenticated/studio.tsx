@@ -10,7 +10,7 @@ import { applyGarment, restyleLook } from "@/lib/ai.functions";
 import { uploadDataUrl } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/studio")({
+export const Route = createFileRoute("/_authenticated/studio")({
   head: () => ({ meta: [{ title: "Studio · Virtual Lookbook" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ model: (s.model as string) || undefined }),
   component: StudioPage,

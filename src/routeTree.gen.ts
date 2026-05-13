@@ -9,86 +9,87 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StudioRouteImport } from './routes/studio'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as MoodboardsRouteImport } from './routes/moodboards'
-import { Route as ModelsRouteImport } from './routes/models'
-import { Route as LookbookRouteImport } from './routes/lookbook'
-import { Route as CollectionsRouteImport } from './routes/collections'
-import { Route as ClosetRouteImport } from './routes/closet'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedMoodboardsRouteImport } from './routes/_authenticated/moodboards'
+import { Route as AuthenticatedModelsRouteImport } from './routes/_authenticated/models'
+import { Route as AuthenticatedLookbookRouteImport } from './routes/_authenticated/lookbook'
+import { Route as AuthenticatedCollectionsRouteImport } from './routes/_authenticated/collections'
+import { Route as AuthenticatedClosetRouteImport } from './routes/_authenticated/closet'
 
-const StudioRoute = StudioRouteImport.update({
-  id: '/studio',
-  path: '/studio',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MoodboardsRoute = MoodboardsRouteImport.update({
-  id: '/moodboards',
-  path: '/moodboards',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ModelsRoute = ModelsRouteImport.update({
-  id: '/models',
-  path: '/models',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LookbookRoute = LookbookRouteImport.update({
-  id: '/lookbook',
-  path: '/lookbook',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CollectionsRoute = CollectionsRouteImport.update({
-  id: '/collections',
-  path: '/collections',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClosetRoute = ClosetRouteImport.update({
-  id: '/closet',
-  path: '/closet',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
+  id: '/_authenticated/studio',
+  path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/_authenticated/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedMoodboardsRoute = AuthenticatedMoodboardsRouteImport.update({
+  id: '/_authenticated/moodboards',
+  path: '/moodboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedModelsRoute = AuthenticatedModelsRouteImport.update({
+  id: '/_authenticated/models',
+  path: '/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedLookbookRoute = AuthenticatedLookbookRouteImport.update({
+  id: '/_authenticated/lookbook',
+  path: '/lookbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedCollectionsRoute =
+  AuthenticatedCollectionsRouteImport.update({
+    id: '/_authenticated/collections',
+    path: '/collections',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedClosetRoute = AuthenticatedClosetRouteImport.update({
+  id: '/_authenticated/closet',
+  path: '/closet',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/closet': typeof ClosetRoute
-  '/collections': typeof CollectionsRoute
-  '/lookbook': typeof LookbookRoute
-  '/models': typeof ModelsRoute
-  '/moodboards': typeof MoodboardsRoute
-  '/settings': typeof SettingsRoute
-  '/studio': typeof StudioRoute
+  '/closet': typeof AuthenticatedClosetRoute
+  '/collections': typeof AuthenticatedCollectionsRoute
+  '/lookbook': typeof AuthenticatedLookbookRoute
+  '/models': typeof AuthenticatedModelsRoute
+  '/moodboards': typeof AuthenticatedMoodboardsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/studio': typeof AuthenticatedStudioRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/closet': typeof ClosetRoute
-  '/collections': typeof CollectionsRoute
-  '/lookbook': typeof LookbookRoute
-  '/models': typeof ModelsRoute
-  '/moodboards': typeof MoodboardsRoute
-  '/settings': typeof SettingsRoute
-  '/studio': typeof StudioRoute
+  '/closet': typeof AuthenticatedClosetRoute
+  '/collections': typeof AuthenticatedCollectionsRoute
+  '/lookbook': typeof AuthenticatedLookbookRoute
+  '/models': typeof AuthenticatedModelsRoute
+  '/moodboards': typeof AuthenticatedMoodboardsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/studio': typeof AuthenticatedStudioRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/closet': typeof ClosetRoute
-  '/collections': typeof CollectionsRoute
-  '/lookbook': typeof LookbookRoute
-  '/models': typeof ModelsRoute
-  '/moodboards': typeof MoodboardsRoute
-  '/settings': typeof SettingsRoute
-  '/studio': typeof StudioRoute
+  '/_authenticated/closet': typeof AuthenticatedClosetRoute
+  '/_authenticated/collections': typeof AuthenticatedCollectionsRoute
+  '/_authenticated/lookbook': typeof AuthenticatedLookbookRoute
+  '/_authenticated/models': typeof AuthenticatedModelsRoute
+  '/_authenticated/moodboards': typeof AuthenticatedMoodboardsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/studio': typeof AuthenticatedStudioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -114,77 +115,28 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/closet'
-    | '/collections'
-    | '/lookbook'
-    | '/models'
-    | '/moodboards'
-    | '/settings'
-    | '/studio'
+    | '/_authenticated/closet'
+    | '/_authenticated/collections'
+    | '/_authenticated/lookbook'
+    | '/_authenticated/models'
+    | '/_authenticated/moodboards'
+    | '/_authenticated/settings'
+    | '/_authenticated/studio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ClosetRoute: typeof ClosetRoute
-  CollectionsRoute: typeof CollectionsRoute
-  LookbookRoute: typeof LookbookRoute
-  ModelsRoute: typeof ModelsRoute
-  MoodboardsRoute: typeof MoodboardsRoute
-  SettingsRoute: typeof SettingsRoute
-  StudioRoute: typeof StudioRoute
+  AuthenticatedClosetRoute: typeof AuthenticatedClosetRoute
+  AuthenticatedCollectionsRoute: typeof AuthenticatedCollectionsRoute
+  AuthenticatedLookbookRoute: typeof AuthenticatedLookbookRoute
+  AuthenticatedModelsRoute: typeof AuthenticatedModelsRoute
+  AuthenticatedMoodboardsRoute: typeof AuthenticatedMoodboardsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/studio': {
-      id: '/studio'
-      path: '/studio'
-      fullPath: '/studio'
-      preLoaderRoute: typeof StudioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/moodboards': {
-      id: '/moodboards'
-      path: '/moodboards'
-      fullPath: '/moodboards'
-      preLoaderRoute: typeof MoodboardsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/models': {
-      id: '/models'
-      path: '/models'
-      fullPath: '/models'
-      preLoaderRoute: typeof ModelsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lookbook': {
-      id: '/lookbook'
-      path: '/lookbook'
-      fullPath: '/lookbook'
-      preLoaderRoute: typeof LookbookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/collections': {
-      id: '/collections'
-      path: '/collections'
-      fullPath: '/collections'
-      preLoaderRoute: typeof CollectionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/closet': {
-      id: '/closet'
-      path: '/closet'
-      fullPath: '/closet'
-      preLoaderRoute: typeof ClosetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -192,19 +144,78 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/studio': {
+      id: '/_authenticated/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof AuthenticatedStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/moodboards': {
+      id: '/_authenticated/moodboards'
+      path: '/moodboards'
+      fullPath: '/moodboards'
+      preLoaderRoute: typeof AuthenticatedMoodboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/models': {
+      id: '/_authenticated/models'
+      path: '/models'
+      fullPath: '/models'
+      preLoaderRoute: typeof AuthenticatedModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/lookbook': {
+      id: '/_authenticated/lookbook'
+      path: '/lookbook'
+      fullPath: '/lookbook'
+      preLoaderRoute: typeof AuthenticatedLookbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/collections': {
+      id: '/_authenticated/collections'
+      path: '/collections'
+      fullPath: '/collections'
+      preLoaderRoute: typeof AuthenticatedCollectionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/closet': {
+      id: '/_authenticated/closet'
+      path: '/closet'
+      fullPath: '/closet'
+      preLoaderRoute: typeof AuthenticatedClosetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ClosetRoute: ClosetRoute,
-  CollectionsRoute: CollectionsRoute,
-  LookbookRoute: LookbookRoute,
-  ModelsRoute: ModelsRoute,
-  MoodboardsRoute: MoodboardsRoute,
-  SettingsRoute: SettingsRoute,
-  StudioRoute: StudioRoute,
+  AuthenticatedClosetRoute: AuthenticatedClosetRoute,
+  AuthenticatedCollectionsRoute: AuthenticatedCollectionsRoute,
+  AuthenticatedLookbookRoute: AuthenticatedLookbookRoute,
+  AuthenticatedModelsRoute: AuthenticatedModelsRoute,
+  AuthenticatedMoodboardsRoute: AuthenticatedMoodboardsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedStudioRoute: AuthenticatedStudioRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

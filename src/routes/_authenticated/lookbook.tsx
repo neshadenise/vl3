@@ -4,7 +4,7 @@ import { useStudio, Look } from "@/lib/store";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/lookbook")({
+export const Route = createFileRoute("/_authenticated/lookbook")({
   head: () => ({ meta: [{ title: "Lookbook · Virtual Lookbook" }] }),
   component: LookbookPage,
 });
