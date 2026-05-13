@@ -82,7 +82,8 @@ function CreateModelDialog() {
       const res = await generateModel({ data: { prompt, pose } });
       if (res.error || !res.dataUrl) { toast.error(res.error || "Generation failed"); setBusy(false); return; }
       const url = await uploadDataUrl(res.dataUrl, "models");
-      const model = addModel({ name: name || "Untitled model", prompt, pose, baseImageUrl: url, currentImageUrl: url });
+      const model = await addModel({ name: name || "Untitled model", prompt, pose, baseImageUrl: url, currentImageUrl: url });
+      if (!model) { toast.error("Could not save model"); setBusy(false); return; }
       toast.success("Model generated ✦");
       setOpen(false);
       setName(""); setPrompt("");
