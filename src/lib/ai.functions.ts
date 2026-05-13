@@ -3,9 +3,10 @@ import { z } from "zod";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+const IMAGE_MODEL_FALLBACK = "google/gemini-3.1-flash-image-preview";
 const TEXT_MODEL = "google/gemini-2.5-flash";
 
-async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: string }> {
+async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?: string; error?: string; textReply?: string }> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) return { error: "LOVABLE_API_KEY not configured" };
 
@@ -13,7 +14,7 @@ async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: st
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: IMAGE_MODEL,
+      model,
       messages: [{ role: "user", content }],
       modalities: ["image", "text"],
     }),
@@ -23,22 +24,33 @@ async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: st
     if (res.status === 429) return { error: "Rate limit hit, please wait a moment." };
     if (res.status === 402) return { error: "AI credits exhausted. Add credits in workspace settings." };
     const body = await res.text();
-    console.error("AI error", res.status, body);
+    console.error("AI error", model, res.status, body.slice(0, 500));
     return { error: `AI error (${res.status}): ${body.slice(0, 200)}` };
   }
 
   const data = await res.json();
   const url = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  const textReply = data?.choices?.[0]?.message?.content;
   if (!url) {
-    console.error("AI returned no image", JSON.stringify(data).slice(0, 800));
-    return { error: "AI returned no image. Try a different prompt." };
+    console.error("AI returned no image", model, JSON.stringify(data).slice(0, 800));
+    return { error: textReply ? `AI declined: ${String(textReply).slice(0, 180)}` : "AI returned no image.", textReply: typeof textReply === "string" ? textReply : undefined };
   }
   return { dataUrl: url };
 }
 
+async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: string }> {
+  const first = await callImageAIOnce(IMAGE_MODEL, content);
+  if (first.dataUrl) return first;
+  // Retry once with a stronger model if the first refused / returned no image
+  console.warn("[ai] primary model returned no image, retrying with fallback");
+  const second = await callImageAIOnce(IMAGE_MODEL_FALLBACK, content);
+  if (second.dataUrl) return second;
+  return { error: second.error || first.error || "AI returned no image. Try a different prompt." };
+}
+
 const FRAMING = `FULL BODY shot from the very top of the head to the soles of both feet, both feet fully visible inside the frame, generous headroom and footroom, vertical 3:4 portrait orientation, the subject occupies roughly 80% of the frame height and is centered, ABSOLUTELY NO cropping of head, hands, or feet.`;
 
-const BASE_PROMPT = `Photorealistic editorial fashion photography. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject MUST be wearing simple plain neutral-tone undergarments only — for femme/female bodies a basic beige bra and briefs; for masc/male bodies plain beige boxer briefs; choose what fits the description. ABSOLUTELY NO NUDITY, no exposed nipples or genitals. Keep the background clean and minimal so the model can later be dressed in different garments.`;
+const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing a plain neutral beige athletic base layer: a smooth seamless sports-bra-style top covering the chest fully, and matching high-waist seamless briefs covering the hips fully. This is a swimwear-equivalent fitting reference photo for catalog use. Fully clothed in the base layer, no skin exposed beyond a typical activewear silhouette. Keep the background clean and minimal so the model can later be dressed in different garments.`;
 
 export const generateModel = createServerFn({ method: "POST" })
   .inputValidator((d: { prompt: string; pose?: string }) =>
@@ -50,7 +62,7 @@ export const generateModel = createServerFn({ method: "POST" })
     return callImageAI(prompt);
   });
 
-const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background EXACTLY. Maintain ${FRAMING} Photorealistic, seamless, no collage artifacts.`;
+const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background EXACTLY. Maintain ${FRAMING} Photorealistic editorial lookbook style, modest and SFW, seamless, no collage artifacts.`;
 
 function isFetchableUrl(u: string) {
   return u.startsWith("https://") || u.startsWith("http://") || u.startsWith("data:image/");
@@ -76,15 +88,7 @@ export const applyGarment = createServerFn({ method: "POST" })
     if (!isFetchableUrl(data.baseImageUrl)) return { error: "Model image URL is not fetchable. Regenerate the model." };
     if (!isFetchableUrl(data.garmentImageUrl)) return { error: "Garment image URL is not fetchable. Re-upload the item." };
 
-    const cat = data.garmentCategory.toLowerCase();
-    let removalNote = "";
-    if (["tops", "dresses", "swimwear", "lingerie", "jackets", "costumes"].some((c) => cat.includes(c))) {
-      removalNote += " Remove any previously visible bra/undershirt only if this garment covers the torso.";
-    }
-    if (["bottoms", "dresses", "swimwear", "lingerie", "costumes"].some((c) => cat.includes(c))) {
-      removalNote += " Remove any previously visible briefs only if this garment covers the lower body.";
-    }
-    const text = `Dress the person in the FIRST image with the garment shown in the SECOND image (a "${data.garmentName}", category: ${data.garmentCategory}). Match the garment's exact fabric, print, color, cut, and details. Fit it naturally to the body and pose.${removalNote} ${data.extraInstruction || ""} ${KEEP}`;
+    const text = `Editorial fashion try-on: dress the person in the FIRST image with the garment shown in the SECOND image (a "${data.garmentName}", category: ${data.garmentCategory}). The new garment naturally covers and replaces any base layer in the area it covers — keep all skin coverage modest and non-explicit at all times. Match the garment's exact fabric, print, color, cut, and details. Fit it naturally to the body and pose. ${data.extraInstruction || ""} ${KEEP}`;
     return callImageAI([
       { type: "text", text },
       { type: "image_url", image_url: { url: data.baseImageUrl } },
