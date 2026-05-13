@@ -181,7 +181,8 @@
 
 @layer utilities {
   .bg-dreamy { background-image: var(--gradient-dreamy); }
-  .bg-glow { background-image: var(--gradient-glow); }
+  .bg-glow { background-image: var(--gradient-glow); color: oklch(0.18 0.04 290); }
+  .dark .bg-glow { color: oklch(0.98 0.01 320); }
   .bg-ink { background-image: var(--gradient-ink); }
   .shadow-soft { box-shadow: var(--shadow-soft); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
