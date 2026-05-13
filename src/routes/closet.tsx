@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, uploadDataUrl } from "@/lib/storage";
+import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
+import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/closet")({
   head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
@@ -129,8 +131,29 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
   const [notes, setNotes] = useState("");
   const [newCat, setNewCat] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiSuggested, setAiSuggested] = useState(false);
 
-  const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); };
+  const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); setAiSuggested(false); };
+
+  const runAutoFill = async (url: string) => {
+    setAnalyzing(true);
+    try {
+      const res: any = await analyzeGarment({ data: { imageUrl: url } });
+      if (res?.error) { console.warn("analyzeGarment:", res.error); return; }
+      // Only fill empty fields so we never overwrite user edits
+      setName((v) => v || res.name || v);
+      setCategory((v) => (v && v !== "Tops" ? v : (res.category || v)));
+      setBrand((v) => v || res.brand || v);
+      setColor((v) => v || res.color || v);
+      setTags((v) => v || (res.tags || []).join(", "));
+      setAiSuggested(true);
+    } catch (e) {
+      console.error("autofill failed", e);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleFile = async (file: File, target: "front" | "back") => {
     if (file.size > 8 * 1024 * 1024) { toast.error("Image too large (8MB max)"); return; }
@@ -138,9 +161,25 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
       toast.loading("Uploading…", { id: "up" });
       const url = await uploadFile(file, "closet");
       toast.success("Uploaded ✦", { id: "up" });
-      if (target === "front") setImageUrl(url); else setBackUrl(url);
+      if (target === "front") { setImageUrl(url); runAutoFill(url); } else setBackUrl(url);
     } catch (e: any) {
       toast.error(e?.message || "Upload failed", { id: "up" });
+    }
+  };
+
+  const handleUrlImport = async (raw: string) => {
+    setImageUrl(raw);
+    if (!raw || !/^https?:\/\//.test(raw)) return;
+    try {
+      toast.loading("Importing image…", { id: "imp" });
+      const m: any = await mirrorRemoteImage({ data: { url: raw } });
+      if (m?.error || !m?.dataUrl) { toast.error(m?.error || "Import failed", { id: "imp" }); return; }
+      const stable = await uploadDataUrl(m.dataUrl, "closet");
+      setImageUrl(stable);
+      toast.success("Imported ✦", { id: "imp" });
+      runAutoFill(stable);
+    } catch (e: any) {
+      toast.error(e?.message || "Import failed", { id: "imp" });
     }
   };
 
