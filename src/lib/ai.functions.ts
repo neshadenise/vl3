@@ -83,6 +83,8 @@ export const applyGarment = createServerFn({ method: "POST" })
     garmentImageUrl: string;
     garmentName: string;
     garmentCategory: string;
+    modelPrompt?: string;
+    modelPose?: string;
     extraInstruction?: string;
   }) =>
     z.object({
@@ -90,6 +92,8 @@ export const applyGarment = createServerFn({ method: "POST" })
       garmentImageUrl: z.string().min(5),
       garmentName: z.string().max(120),
       garmentCategory: z.string().max(60),
+      modelPrompt: z.string().max(500).optional(),
+      modelPose: z.string().max(80).optional(),
       extraInstruction: z.string().max(400).optional(),
     }).parse(d),
   )
@@ -108,9 +112,22 @@ ${KEEP}
 
 Output: a single photorealistic edited image of the person wearing the new garment.`;
     console.log("[applyGarment] base=", data.baseImageUrl.slice(0, 80), "garment=", data.garmentImageUrl.slice(0, 80));
-    return callImageAI([
+    const edited = await callImageAI([
       { type: "text", text },
       { type: "image_url", image_url: { url: data.baseImageUrl } },
+      { type: "image_url", image_url: { url: data.garmentImageUrl } },
+    ]);
+    if (edited.dataUrl || !data.modelPrompt) return edited;
+
+    const fallbackText = `Create one safe photorealistic fashion catalog image. ${FRAMING}
+
+Subject description: ${data.modelPrompt}.
+Pose: ${data.modelPose || "standing neutral, arms relaxed at sides"}.
+
+Use the attached product/reference image as the garment reference only. Ignore any person, body, skin, pose, or background in that reference. Dress the subject in "${data.garmentName}" (${data.garmentCategory}) as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. Keep the outfit fully clothed, modest, and SFW; add neutral fitted coverage underneath only where needed. Neutral seamless studio backdrop, soft diffused light, editorial catalog styling.`;
+    console.warn("[applyGarment] edit returned no image, regenerating dressed model from garment reference");
+    return callImageAI([
+      { type: "text", text: fallbackText },
       { type: "image_url", image_url: { url: data.garmentImageUrl } },
     ]);
   });
