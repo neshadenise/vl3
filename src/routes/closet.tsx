@@ -216,6 +216,13 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
           <button onClick={() => setTab("url")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "url" ? "bg-glow text-primary-foreground" : "glass")}><LinkIcon className="inline h-3 w-3 mr-1" /> URL import</button>
         </div>
 
+        {(analyzing || aiSuggested) && (
+          <div className="glass rounded-xl px-3 py-2 mb-2 text-xs flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            {analyzing ? "AI is reading the image…" : "AI suggested details ✦ — edit anything before saving"}
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <div onDrop={onDrop} onDragOver={(e) => e.preventDefault()}
