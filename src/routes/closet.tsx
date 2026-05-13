@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { uploadFile } from "@/lib/storage";
 
 export const Route = createFileRoute("/closet")({
-  head: () => ({ meta: [{ title: "Closet · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
   component: ClosetPage,
 });
 
@@ -188,7 +188,7 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
                   <button onClick={(e) => { e.stopPropagation(); setImageUrl(""); }} className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80"><X className="h-4 w-4" /></button>
                 </>
               ) : tab === "upload" ? (
-                <div className="text-ink/70">
+                <div className="text-foreground/70">
                   <Upload className="h-6 w-6 mx-auto mb-2" />
                   <div className="font-medium">Drop or click</div>
                   <div className="text-xs">PNG, JPG, WEBP</div>
@@ -196,7 +196,7 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
               ) : (
                 <div className="w-full px-3">
                   <Input placeholder="https://store.com/product.jpg" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="bg-background/80" />
-                  <div className="text-xs text-ink/60 mt-2">Paste any product image URL</div>
+                  <div className="text-xs text-foreground/60 mt-2">Paste any product image URL</div>
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f, "front"); }} />

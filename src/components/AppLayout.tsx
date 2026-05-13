@@ -89,7 +89,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="rounded-2xl p-4 bg-dreamy text-ink">
+          <div className="rounded-2xl p-4 bg-dreamy text-foreground">
             <div className="text-xs uppercase tracking-widest opacity-70">Tip</div>
             <p className="text-sm mt-1 leading-snug">Drop items onto your model in the Studio. Layer, rotate, glow.</p>
           </div>

@@ -4,7 +4,7 @@ import { useStudio } from "@/lib/store";
 import { Wand2, Shirt, BookHeart, Sparkles, Plus, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Dashboard · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Dashboard · Virtual Lookbook" }] }),
   component: Dashboard,
 });
 
@@ -26,10 +26,10 @@ function Dashboard() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs uppercase tracking-[0.25em]">
             <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" /> Atelier of one
           </div>
-          <h1 className="mt-4 font-display text-4xl md:text-6xl leading-[1.05] text-ink">
+          <h1 className="mt-4 font-display text-4xl md:text-6xl leading-[1.05] text-foreground">
             Generate your <span className="text-gradient">muse</span>.<br />Dress her with AI. Glow.
           </h1>
-          <p className="mt-4 max-w-xl text-ink/70">
+          <p className="mt-4 max-w-xl text-foreground/70">
             Prompt a photorealistic fashion model. Tap a piece from your closet — AI dresses the model in it. Restyle with words. No drag, no drop.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">

@@ -11,7 +11,7 @@ import { uploadDataUrl } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/studio")({
-  head: () => ({ meta: [{ title: "Studio · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Studio · Virtual Lookbook" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ model: (s.model as string) || undefined }),
   component: StudioPage,
 });
