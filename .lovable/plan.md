@@ -1,53 +1,33 @@
-## Part 1 — Fix "AI returned no image" on try-on
+## Goal
+Make model generation and clothing try-on reliably return a usable image, and show clear errors when AI or upload fails.
 
-**Root cause:** Gemini 2.5 Flash Image often refuses or returns text-only when the base photo shows a model in undergarments and the prompt mentions removing them. There is no retry, no fallback, and the error swallows the model's text reply so we can't see why.
+## What I’ll change
+1. **Fix image response parsing**
+   - Update the AI response parser to read generated images from both supported response shapes:
+     - `message.images[0].image_url.url`
+     - `message.content[]` entries with `type: "image_url"`
+   - This handles the common case where the AI returns an image, but the app incorrectly treats it as “no image.”
 
-**Fixes in `src/lib/ai.functions.ts`:**
-- Surface the model's refusal text in the error (currently we only see "no image").
-- Soften prompts: drop explicit "remove bra/briefs" wording (which trips safety). Replace with "the new garment naturally covers and replaces any base layer in that area; keep all skin coverage modest and non-explicit".
-- Auto-retry once with the higher-quality `google/gemini-3.1-flash-image-preview` model when the primary returns no image.
-- Reword `BASE_PROMPT` so the underwear is described as "neutral seamless athletic base layer (sports-bra style top + high-waist briefs)" — Gemini accepts this much more reliably than "bra and briefs".
-- Log the full first 800 chars of any non-image response to server logs.
+2. **Use the most reliable edit model first**
+   - Use the editing-capable image model for direct try-on edits first, then fall back to the higher-quality generation model.
+   - Keep the current regeneration fallback, but make it stricter about producing a dressed full-body catalog image.
 
-**Verify:** invoke the server fn via the test tool with a real model + garment URL, confirm an image comes back; then click a closet item in Studio.
+3. **Normalize generated image uploads**
+   - Make `uploadDataUrl` validate that the AI returned a real `data:image/...;base64,...` URL before uploading.
+   - Surface a clear toast if the AI returns an unsupported URL or malformed image.
 
-## Part 2 — Authentication + per-user data
+4. **Improve try-on failure visibility**
+   - Keep concise server logs around the AI model used, response shape, and whether an image was found.
+   - Keep user-facing errors simple, e.g. “AI did not return an image. Try a different item photo.”
 
-**Auth methods:** Email/password + Google (managed). Sign-up requires email verification (no auto-confirm).
+## Files to update
+- `src/lib/ai.functions.ts`
+- `src/lib/storage.ts`
+- Small UI copy/error handling adjustments in:
+  - `src/routes/_authenticated/models.tsx`
+  - `src/routes/_authenticated/studio.tsx`
 
-**Profiles:** create `public.profiles` (id, user_id, display_name, avatar_url) with a trigger that auto-creates a row on signup. Standard RLS (own-row read/update/insert).
-
-**Cloud-synced data — new tables, all with `user_id uuid references auth.users` + RLS (owner-only CRUD):**
-- `closet_items` — name, category, image_url, back_url, color, brand, tags[], notes, source, favorite
-- `models` — name, prompt, pose, base_image_url, current_image_url, history (jsonb), worn_item_ids (jsonb)
-- `looks` — name, model_id, image_url, item_ids (jsonb)
-- `collections` — name, look_ids (jsonb)
-- `moodboards` — name, items (jsonb)
-
-**Storage:** keep the existing `studio-images` bucket public for read; add RLS on `storage.objects` so users can only insert/update/delete inside a folder named after their own `user_id`. Update `src/lib/storage.ts` to upload under `${userId}/<folder>/<file>`.
-
-**Routing & guards:**
-- New `src/routes/login.tsx` (public) — email+password tabs (sign in / sign up) and a "Continue with Google" button using `lovable.auth.signInWithOAuth("google", ...)` after running the social-auth configurator.
-- New `src/routes/_authenticated.tsx` layout with `beforeLoad` that calls `supabase.auth.getUser()` and redirects to `/login` if absent.
-- Move every existing app route (`closet`, `studio`, `models`, `lookbook`, `collections`, `moodboards`, `settings`) under `_authenticated/` by renaming the files. The home (`index.tsx`) stays public as a marketing landing with sign-in CTA.
-- Add a "Sign out" button + user email display in the sidebar of `AppLayout`.
-
-**Store rewrite (`src/lib/store.tsx`):**
-- Replace localStorage persistence with Supabase queries scoped to the current user.
-- On mount, fetch the user's items/models/looks/collections/moodboards in parallel and hydrate state.
-- All mutating actions (`addItem`, `removeItem`, `addModel`, `updateModelImage`, `undoModel`, `resetModel`, `saveLook`, etc.) become `async` and write to Supabase, then update local state on success. Components already `await` most of these.
-
-**Server fns:** AI functions (`generateModel`, `applyGarment`, `analyzeGarment`, `mirrorRemoteImage`) gain `requireSupabaseAuth` middleware so they can't be called anonymously.
-
-**Out of scope for this pass:** password reset page, email branding, migrating any existing localStorage data into the cloud (fresh start per user), team/share features.
-
-## Files touched
-- `src/lib/ai.functions.ts` (fix + auth middleware)
-- New migration: profiles + 5 data tables + RLS + signup trigger + storage policies
-- `src/integrations/lovable/*` (generated by social-auth tool)
-- `src/lib/store.tsx` (Supabase-backed)
-- `src/lib/storage.ts` (user-scoped paths)
-- `src/components/AppLayout.tsx` (sign-out, user email)
-- New: `src/routes/login.tsx`, `src/routes/_authenticated.tsx`
-- Renamed: `closet.tsx` → `_authenticated/closet.tsx` (and same for studio/models/lookbook/collections/moodboards/settings)
-- `src/routes/index.tsx` (landing + CTA)
+## Validation
+- Confirm the code path can handle both image response formats.
+- Verify the app no longer fails just because the image is returned in `message.content` instead of `message.images`.
+- Check logs/errors remain useful for any remaining AI safety/credit/rate-limit failures.
