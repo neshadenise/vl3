@@ -84,19 +84,6 @@ function StudioPage() {
     finally { setBusy(false); }
   };
 
-  const restyle = async () => {
-    if (!styleInput.trim()) return;
-    setBusy(true);
-    try {
-      const res = await restyleLook({ data: { baseImageUrl: model.currentImageUrl, instruction: styleInput } });
-      if (res.error || !res.dataUrl) { toast.error(res.error || "Restyle failed"); return; }
-      const url = await uploadDataUrl(res.dataUrl, "looks");
-      updateModelImage(model.id, url);
-      toast.success("Restyled ✦");
-      setStyleInput("");
-    } catch (e: any) { toast.error(e?.message || "Failed"); }
-    finally { setBusy(false); }
-  };
 
   const save = () => {
     saveLook({ name: `${model.name} look`, modelId: model.id, imageUrl: model.currentImageUrl, itemIds: model.wornItemIds });
