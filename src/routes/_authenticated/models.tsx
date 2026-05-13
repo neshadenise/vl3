@@ -27,7 +27,7 @@ function ModelsPage() {
         <div>
           <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">AI fashion models</div>
           <h1 className="font-display text-4xl md:text-5xl mt-1">Models</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Generate photorealistic models from a prompt. They start in basic underwear, ready to dress.</p>
+          <p className="text-muted-foreground mt-1 text-sm">Generate photorealistic models from a prompt. They start in a neutral fitted base layer, ready to dress.</p>
         </div>
         <CreateModelDialog />
       </header>
@@ -123,7 +123,7 @@ function CreateModelDialog() {
               <SelectContent>{POSE_PRESETS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <p className="text-xs text-muted-foreground">Models are generated in basic neutral underwear. As you add tops or bottoms in the studio, undergarments are removed automatically.</p>
+          <p className="text-xs text-muted-foreground">Models are generated in a neutral fitted base layer. As you add tops or bottoms in the studio, the base layer is replaced automatically.</p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
