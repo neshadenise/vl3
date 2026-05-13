@@ -14,7 +14,11 @@ async function userFolder(folder: string) {
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    throw new Error("AI returned an invalid image. Please try again.");
+  }
   const [meta, b64] = dataUrl.split(",");
+  if (!b64) throw new Error("AI image was empty. Please try again.");
   const mime = meta.match(/:(.*?);/)?.[1] || "image/png";
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
