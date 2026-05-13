@@ -28,7 +28,7 @@ const STYLE_CHIPS = [
 
 function StudioPage() {
   const { models, items, updateModelImage, undoModel, resetModel, saveLook } = useStudio();
-  const search = useSearch({ from: "/studio" });
+  const search = useSearch({ from: "/_authenticated/studio" });
   const [pickedId, setPickedId] = useState<string | undefined>(search.model);
   const modelId = pickedId || search.model || models[0]?.id;
   const model = useMemo(() => models.find((m: Model) => m.id === modelId), [models, modelId]);
