@@ -1,5 +1,5 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Moon, Sparkles, LayoutDashboard, Shirt, Wand2, UserRound, BookHeart, Layers3, Image as ImageIcon, Settings, Sun, Menu, X } from "lucide-react";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Moon, Sparkles, LayoutDashboard, Shirt, Wand2, UserRound, BookHeart, Layers3, Image as ImageIcon, Settings, Sun, Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useStudio } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -17,8 +17,11 @@ const NAV = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const { theme, setTheme } = useStudio();
+  const { theme, setTheme, user, signOut } = useStudio();
+  const nav = useNavigate();
   const [open, setOpen] = useState(false);
+
+  const onSignOut = async () => { await signOut(); nav({ to: "/login" }); };
 
   return (
     <div className="min-h-screen relative">
@@ -89,10 +92,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="rounded-2xl p-4 bg-dreamy text-foreground">
-            <div className="text-xs uppercase tracking-widest opacity-70">Tip</div>
-            <p className="text-sm mt-1 leading-snug">Drop items onto your model in the Studio. Layer, rotate, glow.</p>
-          </div>
+          {user && (
+            <div className="rounded-2xl p-3 glass flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed in</div>
+                <div className="text-xs truncate">{user.email}</div>
+              </div>
+              <button onClick={onSignOut} title="Sign out" className="h-8 w-8 grid place-items-center rounded-full glass hover:bg-accent">
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </aside>
 
         <main className="flex-1 min-w-0">

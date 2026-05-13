@@ -14,7 +14,210 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      closet_items: {
+        Row: {
+          back_url: string | null
+          brand: string | null
+          category: string
+          color: string | null
+          created_at: string
+          favorite: boolean
+          id: string
+          image_url: string
+          name: string
+          notes: string | null
+          source: string | null
+          tags: string[]
+          user_id: string
+        }
+        Insert: {
+          back_url?: string | null
+          brand?: string | null
+          category: string
+          color?: string | null
+          created_at?: string
+          favorite?: boolean
+          id?: string
+          image_url: string
+          name: string
+          notes?: string | null
+          source?: string | null
+          tags?: string[]
+          user_id: string
+        }
+        Update: {
+          back_url?: string | null
+          brand?: string | null
+          category?: string
+          color?: string | null
+          created_at?: string
+          favorite?: boolean
+          id?: string
+          image_url?: string
+          name?: string
+          notes?: string | null
+          source?: string | null
+          tags?: string[]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      collections: {
+        Row: {
+          cover: string | null
+          created_at: string
+          description: string | null
+          id: string
+          look_ids: Json
+          name: string
+          user_id: string
+        }
+        Insert: {
+          cover?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          look_ids?: Json
+          name: string
+          user_id: string
+        }
+        Update: {
+          cover?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          look_ids?: Json
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      looks: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          item_ids: Json
+          model_id: string | null
+          name: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          item_ids?: Json
+          model_id?: string | null
+          name: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          item_ids?: Json
+          model_id?: string | null
+          name?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      models: {
+        Row: {
+          base_image_url: string
+          created_at: string
+          current_image_url: string
+          history: Json
+          id: string
+          name: string
+          pose: string
+          prompt: string
+          user_id: string
+          worn_item_ids: Json
+        }
+        Insert: {
+          base_image_url: string
+          created_at?: string
+          current_image_url: string
+          history?: Json
+          id?: string
+          name: string
+          pose: string
+          prompt: string
+          user_id: string
+          worn_item_ids?: Json
+        }
+        Update: {
+          base_image_url?: string
+          created_at?: string
+          current_image_url?: string
+          history?: Json
+          id?: string
+          name?: string
+          pose?: string
+          prompt?: string
+          user_id?: string
+          worn_item_ids?: Json
+        }
+        Relationships: []
+      }
+      moodboards: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          palette: Json
+          pins: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          palette?: Json
+          pins?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          palette?: Json
+          pins?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

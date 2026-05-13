@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/collections")({
+export const Route = createFileRoute("/_authenticated/collections")({
   head: () => ({ meta: [{ title: "Collections · Virtual Lookbook" }] }),
   component: CollectionsPage,
 });

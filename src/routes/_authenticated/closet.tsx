@@ -14,7 +14,7 @@ import { uploadFile, uploadDataUrl } from "@/lib/storage";
 import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
 import { Sparkles } from "lucide-react";
 
-export const Route = createFileRoute("/closet")({
+export const Route = createFileRoute("/_authenticated/closet")({
   head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
   component: ClosetPage,
 });
@@ -114,7 +114,7 @@ function ItemCard({ item, onFav, onRemove }: { item: ClosetItem; onFav: () => vo
 }
 
 function AddItemDialog({ onAdd, customCategories, addCategory }: {
-  onAdd: (i: Omit<ClosetItem, "id" | "createdAt">) => ClosetItem;
+  onAdd: (i: Omit<ClosetItem, "id" | "createdAt">) => Promise<ClosetItem | null>;
   customCategories: string[];
   addCategory: (c: string) => void;
 }) {
@@ -185,9 +185,9 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f, "front"); };
 
-  const submit = () => {
+  const submit = async () => {
     if (!imageUrl) { toast.error("Add a front image first"); return; }
-    onAdd({
+    await onAdd({
       name: name || "Untitled piece",
       category, imageUrl, backUrl: backUrl || undefined,
       brand: brand || undefined, color: color || undefined,

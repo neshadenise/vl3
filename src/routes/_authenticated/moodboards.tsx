@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, ImagePlus, StickyNote, Palette } from "lucide-react";
 
-export const Route = createFileRoute("/moodboards")({
+export const Route = createFileRoute("/_authenticated/moodboards")({
   head: () => ({ meta: [{ title: "Moodboards · Virtual Lookbook" }] }),
   component: MoodboardsPage,
 });
@@ -25,7 +25,7 @@ function MoodboardsPage() {
           <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Visual notes</div>
           <h1 className="font-display text-4xl md:text-5xl">Moodboards</h1>
         </div>
-        <Button onClick={() => { const m = addMoodboard(`Board ${moodboards.length + 1}`); setActiveId(m.id); }}
+        <Button onClick={async () => { const m = await addMoodboard(`Board ${moodboards.length + 1}`); if (m) setActiveId(m.id); }}
           className="rounded-full bg-glow text-primary-foreground shadow-glow"><Plus className="h-4 w-4 mr-1" /> New board</Button>
       </header>
 
