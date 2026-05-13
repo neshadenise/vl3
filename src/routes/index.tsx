@@ -18,7 +18,7 @@ function Landing() {
           <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" /> Atelier of one
         </div>
         <h1 className="mt-4 font-display text-5xl md:text-7xl leading-[1.05] text-foreground max-w-3xl">
-          Generate your <span className="text-gradient">muse</span>.<br />Dress her with AI. Glow.
+          Generate your <span className="text-gradient">muse</span>.<br />Dress them with AI. Glow.
         </h1>
         <p className="mt-5 max-w-xl text-foreground/70 text-lg">
           Prompt a photorealistic fashion model. Upload clothes — AI styles them onto your model. Save looks, build moodboards, refine with words.
