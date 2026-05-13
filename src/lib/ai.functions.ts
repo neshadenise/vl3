@@ -2,9 +2,38 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const IMAGE_MODEL = "google/gemini-3.1-flash-image-preview";
-const IMAGE_MODEL_FALLBACK = "google/gemini-3-pro-image-preview";
+const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+const IMAGE_MODEL_FALLBACKS = [
+  "google/gemini-3.1-flash-image-preview",
+  "google/gemini-3-pro-image-preview",
+];
 const TEXT_MODEL = "google/gemini-2.5-flash";
+
+function extractImageUrl(data: any): string | undefined {
+  const msg = data?.choices?.[0]?.message;
+  if (!msg) return undefined;
+  // Shape 1: message.images[]
+  const fromImages = msg?.images?.[0]?.image_url?.url || msg?.images?.[0]?.url;
+  if (typeof fromImages === "string" && fromImages.startsWith("data:image/")) return fromImages;
+  // Shape 2: message.content can be a string OR an array of parts
+  if (Array.isArray(msg.content)) {
+    for (const part of msg.content) {
+      const u = part?.image_url?.url || part?.image_url;
+      if (typeof u === "string" && u.startsWith("data:image/")) return u;
+    }
+  }
+  return undefined;
+}
+
+function extractText(data: any): string | undefined {
+  const msg = data?.choices?.[0]?.message;
+  if (!msg) return undefined;
+  if (typeof msg.content === "string") return msg.content;
+  if (Array.isArray(msg.content)) {
+    return msg.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join(" ").trim() || undefined;
+  }
+  return undefined;
+}
 
 async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?: string; error?: string; textReply?: string }> {
   const key = process.env.LOVABLE_API_KEY;
@@ -29,23 +58,25 @@ async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?:
   }
 
   const data = await res.json();
-  const url = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  const textReply = data?.choices?.[0]?.message?.content;
+  const url = extractImageUrl(data);
+  const textReply = extractText(data);
   if (!url) {
-    console.error("AI returned no image", model, JSON.stringify(data).slice(0, 800));
-    return { error: textReply ? `AI declined: ${String(textReply).slice(0, 180)}` : "AI returned no image.", textReply: typeof textReply === "string" ? textReply : undefined };
+    console.error("AI returned no image", model, JSON.stringify(data).slice(0, 1200));
+    return { error: textReply ? `AI declined: ${textReply.slice(0, 180)}` : "AI returned no image.", textReply };
   }
   return { dataUrl: url };
 }
 
 async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: string }> {
-  const first = await callImageAIOnce(IMAGE_MODEL, content);
-  if (first.dataUrl) return first;
-  // Retry once with a stronger model if the first refused / returned no image
-  console.warn("[ai] primary model returned no image, retrying with fallback");
-  const second = await callImageAIOnce(IMAGE_MODEL_FALLBACK, content);
-  if (second.dataUrl) return second;
-  return { error: second.error || first.error || "AI returned no image. Try a different prompt." };
+  let lastErr: string | undefined;
+  const tried = [IMAGE_MODEL, ...IMAGE_MODEL_FALLBACKS];
+  for (const m of tried) {
+    const r = await callImageAIOnce(m, content);
+    if (r.dataUrl) return r;
+    lastErr = r.error || lastErr;
+    console.warn("[ai] model", m, "returned no image, trying next");
+  }
+  return { error: lastErr || "AI returned no image. Try a different prompt." };
 }
 
 const FRAMING = `FULL BODY shot from the very top of the head to the soles of both feet, both feet fully visible inside the frame, generous headroom and footroom, vertical 3:4 portrait orientation, the subject occupies roughly 80% of the frame height and is centered, ABSOLUTELY NO cropping of head, hands, or feet.`;
