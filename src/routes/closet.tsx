@@ -233,9 +233,9 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
                   <div className="text-xs">PNG, JPG, WEBP</div>
                 </div>
               ) : (
-                <div className="w-full px-3">
-                  <Input placeholder="https://store.com/product.jpg" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="bg-background/80" />
-                  <div className="text-xs text-foreground/60 mt-2">Paste any product image URL</div>
+                <div className="w-full px-3" onClick={(e) => e.stopPropagation()}>
+                  <Input placeholder="https://store.com/product.jpg" defaultValue="" onBlur={(e) => handleUrlImport(e.target.value)} className="bg-background/80" />
+                  <div className="text-xs text-foreground/60 mt-2">Paste any product image URL, then tab out</div>
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f, "front"); }} />
