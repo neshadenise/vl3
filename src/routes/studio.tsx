@@ -11,7 +11,7 @@ import { uploadDataUrl } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/studio")({
-  head: () => ({ meta: [{ title: "Studio · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Studio · Virtual Lookbook" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ model: (s.model as string) || undefined }),
   component: StudioPage,
 });
@@ -52,17 +52,21 @@ function StudioPage() {
   const tryOn = async (item: ClosetItem) => {
     setBusy(true);
     try {
-      const res = await applyGarment({ data: {
+      const res: any = await applyGarment({ data: {
         baseImageUrl: model.currentImageUrl,
         garmentImageUrl: item.imageUrl,
         garmentName: item.name,
         garmentCategory: item.category,
       }});
-      if (res.error || !res.dataUrl) { toast.error(res.error || "Try-on failed"); return; }
+      console.log("[tryOn] response", { hasImage: !!res?.dataUrl, error: res?.error });
+      if (res.error || !res.dataUrl) { toast.error(res.error || "Try-on failed", { duration: 6000 }); return; }
       const url = await uploadDataUrl(res.dataUrl, "looks");
       updateModelImage(model.id, url, item.id);
       toast.success(`${item.name} on ✦`);
-    } catch (e: any) { toast.error(e?.message || "Failed"); }
+    } catch (e: any) {
+      console.error("[tryOn] failed", e);
+      toast.error(e?.message || "Failed", { duration: 6000 });
+    }
     finally { setBusy(false); }
   };
 
@@ -70,15 +74,16 @@ function StudioPage() {
     if (!styleInput.trim()) return;
     setBusy(true);
     try {
-      const res = await restyleLook({ data: { baseImageUrl: model.currentImageUrl, instruction: styleInput } });
-      if (res.error || !res.dataUrl) { toast.error(res.error || "Restyle failed"); return; }
+      const res: any = await restyleLook({ data: { baseImageUrl: model.currentImageUrl, instruction: styleInput } });
+      if (res.error || !res.dataUrl) { toast.error(res.error || "Restyle failed", { duration: 6000 }); return; }
       const url = await uploadDataUrl(res.dataUrl, "looks");
       updateModelImage(model.id, url);
       toast.success("Restyled ✦");
       setStyleInput("");
-    } catch (e: any) { toast.error(e?.message || "Failed"); }
+    } catch (e: any) { console.error("[restyle] failed", e); toast.error(e?.message || "Failed"); }
     finally { setBusy(false); }
   };
+
 
   const save = () => {
     saveLook({ name: `${model.name} look`, modelId: model.id, imageUrl: model.currentImageUrl, itemIds: model.wornItemIds });

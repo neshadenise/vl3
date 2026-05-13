@@ -13,7 +13,7 @@ import { generateModel } from "@/lib/ai.functions";
 import { uploadDataUrl } from "@/lib/storage";
 
 export const Route = createFileRoute("/models")({
-  head: () => ({ meta: [{ title: "Models · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Models · Virtual Lookbook" }] }),
   component: ModelsPage,
 });
 

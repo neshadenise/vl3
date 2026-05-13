@@ -5,7 +5,7 @@ import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/lookbook")({
-  head: () => ({ meta: [{ title: "Lookbook · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Lookbook · Virtual Lookbook" }] }),
   component: LookbookPage,
 });
 

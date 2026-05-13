@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Trash2, ImagePlus, StickyNote, Palette } from "lucide-react";
 
 export const Route = createFileRoute("/moodboards")({
-  head: () => ({ meta: [{ title: "Moodboards · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Moodboards · Virtual Lookbook" }] }),
   component: MoodboardsPage,
 });
 

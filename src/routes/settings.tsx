@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Moon, Sun, Trash2, Download, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Settings · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Settings · Virtual Lookbook" }] }),
   component: SettingsPage,
 });
 

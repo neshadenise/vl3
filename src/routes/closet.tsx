@@ -10,10 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, uploadDataUrl } from "@/lib/storage";
+import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
+import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/closet")({
-  head: () => ({ meta: [{ title: "Closet · Style Doll Studio" }] }),
+  head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
   component: ClosetPage,
 });
 
@@ -129,8 +131,29 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
   const [notes, setNotes] = useState("");
   const [newCat, setNewCat] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiSuggested, setAiSuggested] = useState(false);
 
-  const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); };
+  const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); setAiSuggested(false); };
+
+  const runAutoFill = async (url: string) => {
+    setAnalyzing(true);
+    try {
+      const res: any = await analyzeGarment({ data: { imageUrl: url } });
+      if (res?.error) { console.warn("analyzeGarment:", res.error); return; }
+      // Only fill empty fields so we never overwrite user edits
+      setName((v) => v || res.name || v);
+      setCategory((v) => (v && v !== "Tops" ? v : (res.category || v)));
+      setBrand((v) => v || res.brand || v);
+      setColor((v) => v || res.color || v);
+      setTags((v) => v || (res.tags || []).join(", "));
+      setAiSuggested(true);
+    } catch (e) {
+      console.error("autofill failed", e);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleFile = async (file: File, target: "front" | "back") => {
     if (file.size > 8 * 1024 * 1024) { toast.error("Image too large (8MB max)"); return; }
@@ -138,9 +161,25 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
       toast.loading("Uploading…", { id: "up" });
       const url = await uploadFile(file, "closet");
       toast.success("Uploaded ✦", { id: "up" });
-      if (target === "front") setImageUrl(url); else setBackUrl(url);
+      if (target === "front") { setImageUrl(url); runAutoFill(url); } else setBackUrl(url);
     } catch (e: any) {
       toast.error(e?.message || "Upload failed", { id: "up" });
+    }
+  };
+
+  const handleUrlImport = async (raw: string) => {
+    setImageUrl(raw);
+    if (!raw || !/^https?:\/\//.test(raw)) return;
+    try {
+      toast.loading("Importing image…", { id: "imp" });
+      const m: any = await mirrorRemoteImage({ data: { url: raw } });
+      if (m?.error || !m?.dataUrl) { toast.error(m?.error || "Import failed", { id: "imp" }); return; }
+      const stable = await uploadDataUrl(m.dataUrl, "closet");
+      setImageUrl(stable);
+      toast.success("Imported ✦", { id: "imp" });
+      runAutoFill(stable);
+    } catch (e: any) {
+      toast.error(e?.message || "Import failed", { id: "imp" });
     }
   };
 
@@ -177,6 +216,13 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
           <button onClick={() => setTab("url")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "url" ? "bg-glow text-primary-foreground" : "glass")}><LinkIcon className="inline h-3 w-3 mr-1" /> URL import</button>
         </div>
 
+        {(analyzing || aiSuggested) && (
+          <div className="glass rounded-xl px-3 py-2 mb-2 text-xs flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            {analyzing ? "AI is reading the image…" : "AI suggested details ✦ — edit anything before saving"}
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <div onDrop={onDrop} onDragOver={(e) => e.preventDefault()}
@@ -188,15 +234,15 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
                   <button onClick={(e) => { e.stopPropagation(); setImageUrl(""); }} className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80"><X className="h-4 w-4" /></button>
                 </>
               ) : tab === "upload" ? (
-                <div className="text-ink/70">
+                <div className="text-foreground/70">
                   <Upload className="h-6 w-6 mx-auto mb-2" />
                   <div className="font-medium">Drop or click</div>
                   <div className="text-xs">PNG, JPG, WEBP</div>
                 </div>
               ) : (
-                <div className="w-full px-3">
-                  <Input placeholder="https://store.com/product.jpg" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="bg-background/80" />
-                  <div className="text-xs text-ink/60 mt-2">Paste any product image URL</div>
+                <div className="w-full px-3" onClick={(e) => e.stopPropagation()}>
+                  <Input placeholder="https://store.com/product.jpg" defaultValue="" onBlur={(e) => handleUrlImport(e.target.value)} className="bg-background/80" />
+                  <div className="text-xs text-foreground/60 mt-2">Paste any product image URL, then tab out</div>
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f, "front"); }} />

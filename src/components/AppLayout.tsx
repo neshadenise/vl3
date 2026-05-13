@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="h-8 w-8 rounded-full bg-glow shadow-glow grid place-items-center text-primary-foreground">
               <Sparkles className="h-4 w-4" />
             </span>
-            <span className="font-display text-lg tracking-tight">Style Doll<span className="text-gradient"> Studio</span></span>
+            <span className="font-display text-lg tracking-tight">Virtual<span className="text-gradient"> Lookbook</span></span>
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -61,8 +61,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Sparkles className="h-5 w-5" />
             </span>
             <div className="leading-tight">
-              <div className="font-display text-xl">Style Doll</div>
-              <div className="text-gradient font-display text-xl -mt-1">Studio</div>
+              <div className="font-display text-xl">Virtual</div>
+              <div className="text-gradient font-display text-xl -mt-1">Lookbook</div>
             </div>
           </Link>
 
@@ -89,7 +89,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="rounded-2xl p-4 bg-dreamy text-ink">
+          <div className="rounded-2xl p-4 bg-dreamy text-foreground">
             <div className="text-xs uppercase tracking-widest opacity-70">Tip</div>
             <p className="text-sm mt-1 leading-snug">Drop items onto your model in the Studio. Layer, rotate, glow.</p>
           </div>
