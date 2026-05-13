@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
-const IMAGE_MODEL_FALLBACK = "google/gemini-3.1-flash-image-preview";
+const IMAGE_MODEL = "google/gemini-3.1-flash-image-preview";
+const IMAGE_MODEL_FALLBACK = "google/gemini-3-pro-image-preview";
 const TEXT_MODEL = "google/gemini-2.5-flash";
 
 async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?: string; error?: string; textReply?: string }> {
@@ -62,7 +62,16 @@ export const generateModel = createServerFn({ method: "POST" })
     return callImageAI(prompt);
   });
 
-const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background EXACTLY. Maintain ${FRAMING} Photorealistic editorial lookbook style, modest and SFW, seamless, no collage artifacts.`;
+const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background. Maintain ${FRAMING} Photorealistic editorial catalog style, modest and SFW, seamless, no collage artifacts.`;
+
+function garmentPlacement(category: string) {
+  const c = category.toLowerCase();
+  if (c.includes("top") || c.includes("jacket")) return "upper body garment covering the chest and torso";
+  if (c.includes("bottom")) return "lower body garment covering the waist, hips, and legs as appropriate";
+  if (c.includes("dress")) return "full outfit garment covering the torso and lower body";
+  if (c.includes("shoe")) return "footwear placed on both feet";
+  return "fashion item placed naturally on the matching body area";
+}
 
 function isFetchableUrl(u: string) {
   return u.startsWith("https://") || u.startsWith("http://") || u.startsWith("data:image/");
@@ -74,6 +83,8 @@ export const applyGarment = createServerFn({ method: "POST" })
     garmentImageUrl: string;
     garmentName: string;
     garmentCategory: string;
+    modelPrompt?: string;
+    modelPose?: string;
     extraInstruction?: string;
   }) =>
     z.object({
@@ -81,6 +92,8 @@ export const applyGarment = createServerFn({ method: "POST" })
       garmentImageUrl: z.string().min(5),
       garmentName: z.string().max(120),
       garmentCategory: z.string().max(60),
+      modelPrompt: z.string().max(500).optional(),
+      modelPose: z.string().max(80).optional(),
       extraInstruction: z.string().max(400).optional(),
     }).parse(d),
   )
@@ -88,20 +101,33 @@ export const applyGarment = createServerFn({ method: "POST" })
     if (!isFetchableUrl(data.baseImageUrl)) return { error: "Model image URL is not fetchable. Regenerate the model." };
     if (!isFetchableUrl(data.garmentImageUrl)) return { error: "Garment image URL is not fetchable. Re-upload the item." };
 
-    const text = `TASK: Virtual try-on. Generate a NEW edited image of the person from IMAGE 1 now wearing the garment from IMAGE 2 (a "${data.garmentName}", category: ${data.garmentCategory}). This is REQUIRED — do NOT return image 1 unchanged.
+    const text = `Create one safe fashion catalog virtual try-on image.
 
-IMAGE 1 = the model (the person, pose, face, body, lighting, background must be preserved EXACTLY).
-IMAGE 2 = the garment to put on the person. Copy its exact fabric, print, color, cut, length, neckline, sleeves, and trims.
+IMAGE 1 is a fully clothed fitting model wearing a neutral base layer.
+IMAGE 2 is a product/reference photo for the garment only; ignore any person, skin, body, pose, or background in IMAGE 2.
 
-Render the garment realistically draped on the person's body, replacing the corresponding part of their current outfit / base layer in the areas the garment covers. Keep coverage modest and SFW everywhere. ${data.extraInstruction || ""}
+Edit IMAGE 1 so the model is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. Replace the neutral base layer only where this garment covers it; keep all other base-layer coverage modest and fully clothed. Do not output the original unedited model image. ${data.extraInstruction || ""}
 
 ${KEEP}
 
 Output: a single photorealistic edited image of the person wearing the new garment.`;
     console.log("[applyGarment] base=", data.baseImageUrl.slice(0, 80), "garment=", data.garmentImageUrl.slice(0, 80));
-    return callImageAI([
+    const edited = await callImageAI([
       { type: "text", text },
       { type: "image_url", image_url: { url: data.baseImageUrl } },
+      { type: "image_url", image_url: { url: data.garmentImageUrl } },
+    ]);
+    if (edited.dataUrl || !data.modelPrompt) return edited;
+
+    const fallbackText = `Create one safe photorealistic fashion catalog image. ${FRAMING}
+
+Subject description: ${data.modelPrompt}.
+Pose: ${data.modelPose || "standing neutral, arms relaxed at sides"}.
+
+Use the attached product/reference image as the garment reference only. Ignore any person, body, skin, pose, or background in that reference. Dress the subject in "${data.garmentName}" (${data.garmentCategory}) as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. Keep the outfit fully clothed, modest, and SFW; add neutral fitted coverage underneath only where needed. Neutral seamless studio backdrop, soft diffused light, editorial catalog styling.`;
+    console.warn("[applyGarment] edit returned no image, regenerating dressed model from garment reference");
+    return callImageAI([
+      { type: "text", text: fallbackText },
       { type: "image_url", image_url: { url: data.garmentImageUrl } },
     ]);
   });

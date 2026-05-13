@@ -57,6 +57,8 @@ function StudioPage() {
         garmentImageUrl: item.imageUrl,
         garmentName: item.name,
         garmentCategory: item.category,
+        modelPrompt: model.prompt,
+        modelPose: model.pose,
       }});
       console.log("[tryOn] response", { hasImage: !!res?.dataUrl, error: res?.error });
       if (res.error || !res.dataUrl) { toast.error(res.error || "Try-on failed", { duration: 6000 }); return; }
