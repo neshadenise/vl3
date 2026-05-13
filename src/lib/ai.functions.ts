@@ -88,7 +88,17 @@ export const applyGarment = createServerFn({ method: "POST" })
     if (!isFetchableUrl(data.baseImageUrl)) return { error: "Model image URL is not fetchable. Regenerate the model." };
     if (!isFetchableUrl(data.garmentImageUrl)) return { error: "Garment image URL is not fetchable. Re-upload the item." };
 
-    const text = `Editorial fashion try-on: dress the person in the FIRST image with the garment shown in the SECOND image (a "${data.garmentName}", category: ${data.garmentCategory}). The new garment naturally covers and replaces any base layer in the area it covers — keep all skin coverage modest and non-explicit at all times. Match the garment's exact fabric, print, color, cut, and details. Fit it naturally to the body and pose. ${data.extraInstruction || ""} ${KEEP}`;
+    const text = `TASK: Virtual try-on. Generate a NEW edited image of the person from IMAGE 1 now wearing the garment from IMAGE 2 (a "${data.garmentName}", category: ${data.garmentCategory}). This is REQUIRED — do NOT return image 1 unchanged.
+
+IMAGE 1 = the model (the person, pose, face, body, lighting, background must be preserved EXACTLY).
+IMAGE 2 = the garment to put on the person. Copy its exact fabric, print, color, cut, length, neckline, sleeves, and trims.
+
+Render the garment realistically draped on the person's body, replacing the corresponding part of their current outfit / base layer in the areas the garment covers. Keep coverage modest and SFW everywhere. ${data.extraInstruction || ""}
+
+${KEEP}
+
+Output: a single photorealistic edited image of the person wearing the new garment.`;
+    console.log("[applyGarment] base=", data.baseImageUrl.slice(0, 80), "garment=", data.garmentImageUrl.slice(0, 80));
     return callImageAI([
       { type: "text", text },
       { type: "image_url", image_url: { url: data.baseImageUrl } },
