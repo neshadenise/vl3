@@ -6,6 +6,13 @@ function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+async function userFolder(folder: string) {
+  const { data } = await supabase.auth.getUser();
+  const uidStr = data.user?.id;
+  if (!uidStr) throw new Error("You must be signed in to upload.");
+  return `${uidStr}/${folder}`;
+}
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const [meta, b64] = dataUrl.split(",");
   const mime = meta.match(/:(.*?);/)?.[1] || "image/png";
@@ -18,7 +25,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export async function uploadDataUrl(dataUrl: string, folder: string): Promise<string> {
   const blob = dataUrlToBlob(dataUrl);
   const ext = blob.type.split("/")[1] || "png";
-  const path = `${folder}/${uid()}.${ext}`;
+  const path = `${await userFolder(folder)}/${uid()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
     contentType: blob.type,
     upsert: false,
@@ -30,7 +37,7 @@ export async function uploadDataUrl(dataUrl: string, folder: string): Promise<st
 
 export async function uploadFile(file: File, folder: string): Promise<string> {
   const ext = file.name.split(".").pop() || "png";
-  const path = `${folder}/${uid()}.${ext}`;
+  const path = `${await userFolder(folder)}/${uid()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     contentType: file.type,
     upsert: false,
