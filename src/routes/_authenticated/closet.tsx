@@ -14,7 +14,7 @@ import { uploadFile, uploadDataUrl } from "@/lib/storage";
 import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
 import { Sparkles } from "lucide-react";
 
-export const Route = createFileRoute("/closet")({
+export const Route = createFileRoute("/_authenticated/closet")({
   head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
   component: ClosetPage,
 });
