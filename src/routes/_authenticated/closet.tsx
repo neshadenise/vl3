@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { uploadFile, uploadDataUrl } from "@/lib/storage";
-import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
+import { analyzeGarment, mirrorRemoteImage, fetchProductInfo } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/closet")({
   head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
@@ -295,7 +295,7 @@ function ItemDialog({
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setS((p) => ({ ...p, [k]: v }));
 
-  const runAutoFill = async (url: string) => {
+  const runAutoFill = async (url: string, opts?: { sourceUrl?: string; canonical?: Record<string, any> }) => {
     if (!url) return;
     setAnalyzing(true);
     try {
@@ -312,19 +312,26 @@ function ItemDialog({
       if (s.tags) hints.tags = s.tags;
       if (s.notes) hints.notes = s.notes;
       if (s.source) hints.source = s.source;
+      if (opts?.sourceUrl) hints.source_url_canonical = opts.sourceUrl;
+      if (opts?.canonical) {
+        for (const [k, v] of Object.entries(opts.canonical)) {
+          if (v != null && v !== "") hints[`canonical_${k}`] = String(v);
+        }
+      }
 
       const res: any = await analyzeGarment({ data: { imageUrl: url, hints } });
       if (res?.error) { toast.error(res.error); return; }
+      const canonical = opts?.canonical || {};
       setS((p) => ({
         ...p,
-        name: p.name || res.name || p.name,
+        name: canonical.name ? String(canonical.name) : (p.name || res.name || p.name),
         category: p.category && p.category !== "Tops" ? p.category : (res.category || p.category),
-        subcategory: p.subcategory || res.subcategory || p.subcategory,
-        brand: p.brand || res.brand || p.brand,
-        color: p.color || res.color || p.color,
+        subcategory: canonical.subcategory ? String(canonical.subcategory) : (p.subcategory || res.subcategory || p.subcategory),
+        brand: canonical.brand ? String(canonical.brand) : (p.brand || res.brand || p.brand),
+        color: canonical.color ? String(canonical.color) : (p.color || res.color || p.color),
         gender: p.gender || res.gender || p.gender,
         season: p.season || res.season || p.season,
-        price: p.price || (res.price != null ? String(res.price) : p.price),
+        price: canonical.price != null ? String(canonical.price) : (p.price || (res.price != null ? String(res.price) : p.price)),
         tags: p.tags || (res.tags || []).join(", "),
       }));
       setAiSuggested(true);
@@ -345,8 +352,39 @@ function ItemDialog({
   };
 
   const handleUrlImport = async (raw: string) => {
-    set("imageUrl", raw);
-    if (!raw || !/^https?:\/\//.test(raw)) return;
+    if (!raw || !/^https?:\/\//.test(raw)) { set("imageUrl", raw); return; }
+    set("source", raw);
+
+    const isImageUrl = /\.(jpe?g|png|webp|gif|avif|heic|heif)(\?|#|$)/i.test(raw);
+
+    // 1. Product page → scrape canonical metadata first; these win over AI vision.
+    let pageInfo: Record<string, any> = {};
+    if (!isImageUrl) {
+      try {
+        toast.loading("Reading product page…", { id: "imp" });
+        const info: any = await fetchProductInfo({ data: { url: raw } });
+        if (info?.info) {
+          pageInfo = info.info;
+          setS((p) => ({
+            ...p,
+            name:  pageInfo.name  ? String(pageInfo.name)  : p.name,
+            brand: pageInfo.brand ? String(pageInfo.brand) : p.brand,
+            color: pageInfo.color ? String(pageInfo.color) : p.color,
+            price: pageInfo.price != null ? String(pageInfo.price) : p.price,
+            subcategory: pageInfo.subcategory ? String(pageInfo.subcategory) : p.subcategory,
+            notes: p.notes || (pageInfo.description ? String(pageInfo.description) : p.notes),
+          }));
+        }
+      } catch (e) { console.warn("fetchProductInfo failed", e); }
+    } else {
+      set("imageUrl", raw);
+    }
+
+    // 2. Fetch image bytes (only if user pasted a direct image URL).
+    if (!isImageUrl) {
+      toast.success("Page info imported ✦ — also paste the image URL to fetch the photo", { id: "imp" });
+      return;
+    }
     try {
       toast.loading("Importing image…", { id: "imp" });
       const m: any = await mirrorRemoteImage({ data: { url: raw } });
@@ -354,7 +392,8 @@ function ItemDialog({
       const stable = await uploadDataUrl(m.dataUrl, "closet");
       set("imageUrl", stable);
       toast.success("Imported ✦", { id: "imp" });
-      runAutoFill(stable);
+      // 3. AI fills only what URL didn't provide.
+      runAutoFill(stable, { sourceUrl: raw, canonical: pageInfo });
     } catch (e: any) { toast.error(e?.message || "Import failed", { id: "imp" }); }
   };
 
@@ -488,14 +527,29 @@ function ItemDialog({
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Season</label>
-                  <Select value={s.season || "__any__"} onValueChange={(v) => set("season", v === "__any__" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__any__">Any</SelectItem>
-                      {SEASONS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Seasons</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {SEASONS.map((g) => {
+                      const sel = new Set(s.season ? s.season.split(",").map((x) => x.trim()).filter(Boolean) : []);
+                      const on = sel.has(g);
+                      return (
+                        <button
+                          type="button"
+                          key={g}
+                          onClick={() => {
+                            if (on) sel.delete(g); else sel.add(g);
+                            set("season", Array.from(sel).join(", "));
+                          }}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-xs border transition",
+                            on ? "bg-glow text-primary-foreground shadow-glow border-transparent" : "glass hover:shadow-glow"
+                          )}
+                        >
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">

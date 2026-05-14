@@ -276,10 +276,11 @@ export const analyzeGarment = createServerFn({ method: "POST" })
 - color: single dominant color word
 - material: primary fabric/material if visible (e.g. "cotton", "leather"), or ""
 - gender: one of "Femme", "Masc", "Androgynous", "Unisex", "Kids", "Other"
-- season: one of "Spring", "Summer", "Fall", "Winter", "All-season"
+- season: an array of one or more of "Spring", "Summer", "Fall", "Winter", "All-season"
 - price: estimated retail price as a number in USD, or null if you cannot tell
 - tags: 3-6 lowercase style tags, e.g. ["lace","goth","corset"]
 Use any user hints below as ground truth — do not contradict them; fill the rest from the image.
+Hints prefixed "canonical_" come from the official product page/URL and are ABSOLUTE TRUTH — never override or reword them.
 Respond ONLY with valid JSON, no markdown.`;
 
     const userText = hintLines
@@ -314,6 +315,12 @@ Respond ONLY with valid JSON, no markdown.`;
       const category = ALLOWED_CATEGORIES.includes(parsed?.category) ? parsed.category : "Tops";
       const allowedGender = ["Femme","Masc","Androgynous","Unisex","Kids","Other"];
       const allowedSeason = ["Spring","Summer","Fall","Winter","All-season"];
+      let seasonOut = "";
+      if (Array.isArray(parsed?.season)) {
+        seasonOut = parsed.season.filter((x: any) => allowedSeason.includes(x)).join(", ");
+      } else if (typeof parsed?.season === "string" && allowedSeason.includes(parsed.season)) {
+        seasonOut = parsed.season;
+      }
       const priceNum = typeof parsed?.price === "number" ? parsed.price
         : typeof parsed?.price === "string" && parsed.price.trim() !== "" && !isNaN(Number(parsed.price)) ? Number(parsed.price)
         : null;
@@ -325,7 +332,7 @@ Respond ONLY with valid JSON, no markdown.`;
         color: String(parsed?.color || "").slice(0, 30),
         material: String(parsed?.material || "").slice(0, 40),
         gender: allowedGender.includes(parsed?.gender) ? parsed.gender : "",
-        season: allowedSeason.includes(parsed?.season) ? parsed.season : "",
+        season: seasonOut,
         price: priceNum,
         tags: Array.isArray(parsed?.tags) ? parsed.tags.map((t: any) => String(t).toLowerCase().slice(0, 24)).slice(0, 6) : [],
       };
@@ -346,6 +353,75 @@ export const mirrorRemoteImage = createServerFn({ method: "POST" })
       const buf = await r.arrayBuffer();
       const b64 = Buffer.from(buf).toString("base64");
       return { dataUrl: `data:${ct};base64,${b64}` };
+    } catch (e: any) {
+      return { error: e?.message || "Fetch failed" };
+    }
+  });
+
+// Fetch a product page and extract canonical info from meta tags + JSON-LD.
+// Used as ground truth that overrides AI vision guesses.
+export const fetchProductInfo = createServerFn({ method: "POST" })
+  .inputValidator((d: { url: string }) => z.object({ url: z.string().url() }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const r = await fetch(data.url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; LookbookBot/1.0)" },
+        redirect: "follow",
+      });
+      if (!r.ok) return { error: `Could not load page (${r.status})` };
+      const ct = r.headers.get("content-type") || "";
+      if (!ct.includes("text/html")) return { error: "Not an HTML page" };
+      const html = (await r.text()).slice(0, 500_000);
+
+      const meta = (prop: string) => {
+        const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i");
+        const m = html.match(re); return m ? m[1].trim() : "";
+      };
+      const metaRev = (prop: string) => {
+        const re = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i");
+        const m = html.match(re); return m ? m[1].trim() : "";
+      };
+      const get = (p: string) => meta(p) || metaRev(p);
+
+      const result: Record<string, string | number> = {};
+      const title = get("og:title") || get("twitter:title") || (html.match(/<title>([^<]+)<\/title>/i)?.[1] ?? "").trim();
+      const desc  = get("og:description") || get("twitter:description") || get("description");
+      const brand = get("product:brand") || get("og:brand") || get("brand");
+      const price = get("product:price:amount") || get("og:price:amount") || get("price");
+      const color = get("product:color") || get("color");
+      const material = get("product:material") || get("material");
+
+      if (title) result.name = title.slice(0, 120);
+      if (brand) result.brand = brand.slice(0, 60);
+      if (color) result.color = color.slice(0, 30);
+      if (material) result.material = material.slice(0, 40);
+      if (price && !isNaN(Number(price))) result.price = Number(price);
+      if (desc)  result.description = desc.slice(0, 400);
+
+      // JSON-LD Product schema
+      const ldMatches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+      for (const m of ldMatches) {
+        try {
+          const blob = JSON.parse(m[1].trim());
+          const items = Array.isArray(blob) ? blob : (blob["@graph"] || [blob]);
+          for (const it of items) {
+            const t = it?.["@type"];
+            const isProduct = t === "Product" || (Array.isArray(t) && t.includes("Product"));
+            if (!isProduct) continue;
+            if (it.name && !result.name) result.name = String(it.name).slice(0, 120);
+            const b = typeof it.brand === "string" ? it.brand : it.brand?.name;
+            if (b && !result.brand) result.brand = String(b).slice(0, 60);
+            if (it.color && !result.color) result.color = String(it.color).slice(0, 30);
+            if (it.material && !result.material) result.material = String(it.material).slice(0, 40);
+            const offer = Array.isArray(it.offers) ? it.offers[0] : it.offers;
+            const p = offer?.price ?? offer?.lowPrice;
+            if (p && !result.price && !isNaN(Number(p))) result.price = Number(p);
+            if (it.category && !result.subcategory) result.subcategory = String(it.category).slice(0, 60);
+          }
+        } catch { /* ignore bad JSON-LD */ }
+      }
+
+      return { info: result };
     } catch (e: any) {
       return { error: e?.message || "Fetch failed" };
     }
