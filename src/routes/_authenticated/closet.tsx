@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { useStudio, DEFAULT_CATEGORIES, ClosetItem } from "@/lib/store";
-import { useMemo, useRef, useState, ChangeEvent, DragEvent } from "react";
-import { Heart, Plus, Search, Trash2, Upload, Link as LinkIcon, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, ChangeEvent, DragEvent } from "react";
+import { Heart, Plus, Search, Trash2, Upload, Link as LinkIcon, X, Pencil, CheckSquare, Square, Wand2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,18 +12,37 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { uploadFile, uploadDataUrl } from "@/lib/storage";
 import { analyzeGarment, mirrorRemoteImage } from "@/lib/ai.functions";
-import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/closet")({
   head: () => ({ meta: [{ title: "Closet · Virtual Lookbook" }] }),
   component: ClosetPage,
 });
 
+const GENDERS = ["Femme", "Masc", "Androgynous", "Unisex", "Kids", "Other"];
+const SEASONS = ["Spring", "Summer", "Fall", "Winter", "All-season"];
+
+type FormState = {
+  name: string; category: string; subcategory: string; gender: string; season: string;
+  price: string; brand: string; color: string; tags: string; source: string; notes: string;
+  imageUrl: string; backUrl: string; customFields: { label: string; value: string }[];
+};
+
+const emptyForm = (): FormState => ({
+  name: "", category: "Tops", subcategory: "", gender: "", season: "",
+  price: "", brand: "", color: "", tags: "", source: "", notes: "",
+  imageUrl: "", backUrl: "", customFields: [],
+});
+
 function ClosetPage() {
-  const { items, addItem, updateItem, removeItem, customCategories, addCategory } = useStudio();
+  const { items, addItem, updateItem, removeItem, customCategories, addCategory, subcategories, addSubcategory, addToTray } = useStudio();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<string>("All");
   const [q, setQ] = useState("");
   const [favOnly, setFavOnly] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<ClosetItem | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const allCats = useMemo(() => ["All", ...DEFAULT_CATEGORIES, ...customCategories], [customCategories]);
 
@@ -32,6 +51,32 @@ function ClosetPage() {
     (!favOnly || i.favorite) &&
     (q === "" || i.name.toLowerCase().includes(q.toLowerCase()) || i.tags.some((t) => t.toLowerCase().includes(q.toLowerCase())))
   );
+
+  const toggle = (id: string) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+
+  const bulkSendToStudio = () => {
+    if (selected.size === 0) return;
+    addToTray(Array.from(selected));
+    toast.success(`${selected.size} item(s) sent to Styling Studio ✦`);
+    exitSelect();
+    navigate({ to: "/studio" });
+  };
+  const bulkDelete = async () => {
+    if (selected.size === 0 || !confirm(`Delete ${selected.size} item(s)?`)) return;
+    for (const id of selected) await removeItem(id);
+    toast.success("Deleted");
+    exitSelect();
+  };
+  const bulkFav = async () => {
+    for (const id of selected) {
+      const it = items.find((x) => x.id === id);
+      if (it) await updateItem(id, { favorite: !it.favorite });
+    }
+    exitSelect();
+  };
 
   return (
     <AppLayout>
@@ -42,7 +87,12 @@ function ClosetPage() {
           <p className="text-muted-foreground mt-1 text-sm">Upload, tag, and prep items for the studio.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <AddItemDialog onAdd={addItem} customCategories={customCategories} addCategory={addCategory} />
+          <Button variant={selectMode ? "default" : "outline"} className="rounded-full" onClick={() => { selectMode ? exitSelect() : setSelectMode(true); }}>
+            {selectMode ? <><CheckSquare className="h-4 w-4 mr-1" /> Done</> : <><Square className="h-4 w-4 mr-1" /> Select</>}
+          </Button>
+          <Button onClick={() => setAdding(true)} className="rounded-full bg-glow text-primary-foreground shadow-glow">
+            <Plus className="h-4 w-4 mr-1" /> Add item
+          </Button>
         </div>
       </header>
 
@@ -66,6 +116,16 @@ function ClosetPage() {
         ))}
       </div>
 
+      {selectMode && (
+        <div className="mt-3 glass rounded-2xl px-4 py-2 flex items-center gap-2 flex-wrap sticky top-2 z-20">
+          <span className="text-sm">{selected.size} selected</span>
+          <div className="flex-1" />
+          <Button size="sm" variant="outline" onClick={bulkFav} disabled={!selected.size}><Heart className="h-3.5 w-3.5 mr-1" /> Favorite</Button>
+          <Button size="sm" variant="outline" onClick={bulkSendToStudio} disabled={!selected.size}><Wand2 className="h-3.5 w-3.5 mr-1" /> Send to Studio</Button>
+          <Button size="sm" variant="destructive" onClick={bulkDelete} disabled={!selected.size}><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="mt-10 glass rounded-3xl p-12 text-center">
           <div className="font-display text-2xl">Your closet is a blank canvas</div>
@@ -75,84 +135,183 @@ function ClosetPage() {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filtered.map((it) => (
             <ItemCard key={it.id} item={it}
+              selectMode={selectMode}
+              selected={selected.has(it.id)}
+              onToggleSelect={() => toggle(it.id)}
+              onEdit={() => setEditing(it)}
               onFav={() => updateItem(it.id, { favorite: !it.favorite })}
-              onRemove={() => removeItem(it.id)} />
+              onRemove={() => removeItem(it.id)}
+              onSendToStudio={() => { addToTray(it.id); toast.success(`${it.name} sent to Studio ✦`); }}
+            />
           ))}
         </div>
       )}
+
+      <ItemDialog
+        open={adding} onOpenChange={setAdding}
+        mode="add"
+        customCategories={customCategories}
+        subcategories={subcategories}
+        addCategory={addCategory}
+        addSubcategory={addSubcategory}
+        onSubmit={async (s) => {
+          await addItem({
+            name: s.name || "Untitled piece",
+            category: s.category, imageUrl: s.imageUrl, backUrl: s.backUrl || undefined,
+            brand: s.brand || undefined, color: s.color || undefined,
+            tags: s.tags.split(",").map((t) => t.trim()).filter(Boolean),
+            source: s.source || undefined, notes: s.notes || undefined,
+            subcategory: s.subcategory || undefined,
+            gender: s.gender || undefined,
+            season: s.season || undefined,
+            price: s.price ? Number(s.price) : undefined,
+            customFields: Object.fromEntries(s.customFields.filter((f) => f.label.trim()).map((f) => [f.label.trim(), f.value])),
+          });
+          toast.success("Added to closet ✦");
+        }}
+      />
+
+      <ItemDialog
+        open={!!editing} onOpenChange={(o) => !o && setEditing(null)}
+        mode="edit"
+        initial={editing || undefined}
+        customCategories={customCategories}
+        subcategories={subcategories}
+        addCategory={addCategory}
+        addSubcategory={addSubcategory}
+        onSubmit={async (s) => {
+          if (!editing) return;
+          await updateItem(editing.id, {
+            name: s.name, category: s.category,
+            imageUrl: s.imageUrl, backUrl: s.backUrl || undefined,
+            brand: s.brand || undefined, color: s.color || undefined,
+            tags: s.tags.split(",").map((t) => t.trim()).filter(Boolean),
+            source: s.source || undefined, notes: s.notes || undefined,
+            subcategory: s.subcategory || undefined,
+            gender: s.gender || undefined,
+            season: s.season || undefined,
+            price: s.price ? Number(s.price) : undefined,
+            customFields: Object.fromEntries(s.customFields.filter((f) => f.label.trim()).map((f) => [f.label.trim(), f.value])),
+          });
+          toast.success("Updated ✦");
+          setEditing(null);
+        }}
+      />
     </AppLayout>
   );
 }
 
-function ItemCard({ item, onFav, onRemove }: { item: ClosetItem; onFav: () => void; onRemove: () => void }) {
+function ItemCard({ item, selectMode, selected, onToggleSelect, onEdit, onFav, onRemove, onSendToStudio }: {
+  item: ClosetItem; selectMode: boolean; selected: boolean;
+  onToggleSelect: () => void; onEdit: () => void; onFav: () => void; onRemove: () => void; onSendToStudio: () => void;
+}) {
   return (
-    <div className="group relative glass rounded-2xl overflow-hidden shadow-soft hover:shadow-glow transition-all">
-      <div className="aspect-[3/4] bg-dreamy">
+    <div className={cn("group relative glass rounded-2xl overflow-hidden shadow-soft hover:shadow-glow transition-all", selected && "ring-2 ring-primary")}>
+      <div className="aspect-[3/4] bg-dreamy cursor-pointer" onClick={() => selectMode ? onToggleSelect() : undefined}>
         {item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" /> : null}
       </div>
+      {selectMode && (
+        <div className="absolute top-2 left-2 h-6 w-6 grid place-items-center rounded-md bg-background/90 border" onClick={onToggleSelect}>
+          {selected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+        </div>
+      )}
       <div className="p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="font-medium truncate">{item.name}</div>
-            <div className="text-xs text-muted-foreground truncate">{item.category}{item.brand ? ` · ${item.brand}` : ""}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              {item.category}{item.subcategory ? ` · ${item.subcategory}` : ""}{item.brand ? ` · ${item.brand}` : ""}
+            </div>
           </div>
           <button onClick={onFav} aria-label="Favorite" className="shrink-0 h-8 w-8 grid place-items-center rounded-full glass">
             <Heart className={cn("h-3.5 w-3.5", item.favorite && "fill-current text-pink-500")} />
           </button>
         </div>
+        {(item.gender || item.season || item.price != null) && (
+          <div className="mt-1 text-[10px] text-muted-foreground truncate">
+            {[item.gender, item.season, item.price != null ? `$${item.price}` : null].filter(Boolean).join(" · ")}
+          </div>
+        )}
         {item.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {item.tags.slice(0,3).map((t) => <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-accent-foreground">{t}</span>)}
           </div>
         )}
+        <div className="mt-2 flex gap-1">
+          <Button size="sm" variant="outline" className="h-7 text-[11px] flex-1" onClick={onSendToStudio}>
+            <Wand2 className="h-3 w-3 mr-1" /> Studio
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={onEdit}><Pencil className="h-3 w-3" /></Button>
+        </div>
       </div>
-      <button onClick={onRemove} aria-label="Delete" className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80 opacity-0 group-hover:opacity-100 transition">
-        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-      </button>
+      {!selectMode && (
+        <button onClick={onRemove} aria-label="Delete" className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80 opacity-0 group-hover:opacity-100 transition">
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+        </button>
+      )}
     </div>
   );
 }
 
-function AddItemDialog({ onAdd, customCategories, addCategory }: {
-  onAdd: (i: Omit<ClosetItem, "id" | "createdAt">) => Promise<ClosetItem | null>;
+function ItemDialog({
+  open, onOpenChange, mode, initial, customCategories, subcategories, addCategory, addSubcategory, onSubmit,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void;
+  mode: "add" | "edit";
+  initial?: ClosetItem;
   customCategories: string[];
+  subcategories: { id: string; category: string; name: string }[];
   addCategory: (c: string) => void;
+  addSubcategory: (cat: string, name: string) => Promise<void>;
+  onSubmit: (s: FormState) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"upload" | "url">("upload");
-  const [imageUrl, setImageUrl] = useState("");
-  const [backUrl, setBackUrl] = useState("");
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<string>("Tops");
-  const [brand, setBrand] = useState("");
-  const [color, setColor] = useState("");
-  const [tags, setTags] = useState("");
-  const [source, setSource] = useState("");
-  const [notes, setNotes] = useState("");
+  const [s, setS] = useState<FormState>(emptyForm());
   const [newCat, setNewCat] = useState("");
+  const [newSub, setNewSub] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiSuggested, setAiSuggested] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const reset = () => { setImageUrl(""); setBackUrl(""); setName(""); setBrand(""); setColor(""); setTags(""); setSource(""); setNotes(""); setNewCat(""); setAiSuggested(false); };
+  useEffect(() => {
+    if (!open) return;
+    if (mode === "edit" && initial) {
+      setS({
+        name: initial.name, category: initial.category,
+        subcategory: initial.subcategory || "", gender: initial.gender || "",
+        season: initial.season || "", price: initial.price != null ? String(initial.price) : "",
+        brand: initial.brand || "", color: initial.color || "",
+        tags: (initial.tags || []).join(", "),
+        source: initial.source || "", notes: initial.notes || "",
+        imageUrl: initial.imageUrl, backUrl: initial.backUrl || "",
+        customFields: Object.entries(initial.customFields || {}).map(([label, value]) => ({ label, value: String(value) })),
+      });
+    } else if (mode === "add") {
+      setS(emptyForm());
+      setAiSuggested(false);
+    }
+  }, [open, mode, initial]);
+
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setS((p) => ({ ...p, [k]: v }));
 
   const runAutoFill = async (url: string) => {
     setAnalyzing(true);
     try {
       const res: any = await analyzeGarment({ data: { imageUrl: url } });
       if (res?.error) { console.warn("analyzeGarment:", res.error); return; }
-      // Only fill empty fields so we never overwrite user edits
-      setName((v) => v || res.name || v);
-      setCategory((v) => (v && v !== "Tops" ? v : (res.category || v)));
-      setBrand((v) => v || res.brand || v);
-      setColor((v) => v || res.color || v);
-      setTags((v) => v || (res.tags || []).join(", "));
+      setS((p) => ({
+        ...p,
+        name: p.name || res.name || p.name,
+        category: p.category && p.category !== "Tops" ? p.category : (res.category || p.category),
+        brand: p.brand || res.brand || p.brand,
+        color: p.color || res.color || p.color,
+        tags: p.tags || (res.tags || []).join(", "),
+      }));
       setAiSuggested(true);
     } catch (e) {
       console.error("autofill failed", e);
-    } finally {
-      setAnalyzing(false);
-    }
+    } finally { setAnalyzing(false); }
   };
 
   const handleFile = async (file: File, target: "front" | "back") => {
@@ -161,137 +320,206 @@ function AddItemDialog({ onAdd, customCategories, addCategory }: {
       toast.loading("Uploading…", { id: "up" });
       const url = await uploadFile(file, "closet");
       toast.success("Uploaded ✦", { id: "up" });
-      if (target === "front") { setImageUrl(url); runAutoFill(url); } else setBackUrl(url);
-    } catch (e: any) {
-      toast.error(e?.message || "Upload failed", { id: "up" });
-    }
+      if (target === "front") { set("imageUrl", url); runAutoFill(url); } else set("backUrl", url);
+    } catch (e: any) { toast.error(e?.message || "Upload failed", { id: "up" }); }
   };
 
   const handleUrlImport = async (raw: string) => {
-    setImageUrl(raw);
+    set("imageUrl", raw);
     if (!raw || !/^https?:\/\//.test(raw)) return;
     try {
       toast.loading("Importing image…", { id: "imp" });
       const m: any = await mirrorRemoteImage({ data: { url: raw } });
       if (m?.error || !m?.dataUrl) { toast.error(m?.error || "Import failed", { id: "imp" }); return; }
       const stable = await uploadDataUrl(m.dataUrl, "closet");
-      setImageUrl(stable);
+      set("imageUrl", stable);
       toast.success("Imported ✦", { id: "imp" });
       runAutoFill(stable);
-    } catch (e: any) {
-      toast.error(e?.message || "Import failed", { id: "imp" });
-    }
+    } catch (e: any) { toast.error(e?.message || "Import failed", { id: "imp" }); }
   };
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f, "front"); };
 
+  const subOptions = subcategories.filter((x) => x.category === s.category);
+
   const submit = async () => {
-    if (!imageUrl) { toast.error("Add a front image first"); return; }
-    await onAdd({
-      name: name || "Untitled piece",
-      category, imageUrl, backUrl: backUrl || undefined,
-      brand: brand || undefined, color: color || undefined,
-      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-      source: source || undefined, notes: notes || undefined,
-    });
-    toast.success("Added to closet ✦");
-    reset();
-    setOpen(false);
+    if (!s.imageUrl) { toast.error("Add a front image first"); return; }
+    setSaving(true);
+    try { await onSubmit(s); onOpenChange(false); }
+    catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(false); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="rounded-full bg-glow text-primary-foreground shadow-glow hover:shadow-glow">
-          <Plus className="h-4 w-4 mr-1" /> Add item
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl glass">
-        <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Add to your closet</DialogTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl glass max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6">
+          <DialogTitle className="font-display text-2xl">{mode === "edit" ? "Edit item" : "Add to your closet"}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-2 mb-2">
-          <button onClick={() => setTab("upload")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "upload" ? "bg-glow text-primary-foreground" : "glass")}><Upload className="inline h-3 w-3 mr-1" /> Upload</button>
-          <button onClick={() => setTab("url")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "url" ? "bg-glow text-primary-foreground" : "glass")}><LinkIcon className="inline h-3 w-3 mr-1" /> URL import</button>
-        </div>
+        <div className="px-6 pb-4 overflow-y-auto flex-1">
+          {mode === "add" && (
+            <div className="flex gap-2 mb-2">
+              <button onClick={() => setTab("upload")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "upload" ? "bg-glow text-primary-foreground" : "glass")}><Upload className="inline h-3 w-3 mr-1" /> Upload</button>
+              <button onClick={() => setTab("url")} className={cn("rounded-full px-4 py-1.5 text-xs", tab === "url" ? "bg-glow text-primary-foreground" : "glass")}><LinkIcon className="inline h-3 w-3 mr-1" /> URL import</button>
+            </div>
+          )}
 
-        {(analyzing || aiSuggested) && (
-          <div className="glass rounded-xl px-3 py-2 mb-2 text-xs flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            {analyzing ? "AI is reading the image…" : "AI suggested details ✦ — edit anything before saving"}
-          </div>
-        )}
+          {(analyzing || aiSuggested) && (
+            <div className="glass rounded-xl px-3 py-2 mb-2 text-xs flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              {analyzing ? "AI is reading the image…" : "AI suggested details ✦ — edit anything before saving"}
+            </div>
+          )}
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div onDrop={onDrop} onDragOver={(e) => e.preventDefault()}
-              className="aspect-[3/4] rounded-2xl bg-dreamy border-2 border-dashed border-border grid place-items-center text-center p-4 cursor-pointer relative overflow-hidden"
-              onClick={() => tab === "upload" && fileRef.current?.click()}>
-              {imageUrl ? (
-                <>
-                  <img src={imageUrl} className="absolute inset-0 h-full w-full object-cover" alt="preview" />
-                  <button onClick={(e) => { e.stopPropagation(); setImageUrl(""); }} className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80"><X className="h-4 w-4" /></button>
-                </>
-              ) : tab === "upload" ? (
-                <div className="text-foreground/70">
-                  <Upload className="h-6 w-6 mx-auto mb-2" />
-                  <div className="font-medium">Drop or click</div>
-                  <div className="text-xs">PNG, JPG, WEBP</div>
-                </div>
-              ) : (
-                <div className="w-full px-3" onClick={(e) => e.stopPropagation()}>
-                  <Input placeholder="https://store.com/product.jpg" defaultValue="" onBlur={(e) => handleUrlImport(e.target.value)} className="bg-background/80" />
-                  <div className="text-xs text-foreground/60 mt-2">Paste any product image URL, then tab out</div>
-                </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div onDrop={onDrop} onDragOver={(e) => e.preventDefault()}
+                className="aspect-[3/4] rounded-2xl bg-dreamy border-2 border-dashed border-border grid place-items-center text-center p-4 cursor-pointer relative overflow-hidden"
+                onClick={() => mode === "edit" ? fileRef.current?.click() : tab === "upload" && fileRef.current?.click()}>
+                {s.imageUrl ? (
+                  <>
+                    <img src={s.imageUrl} className="absolute inset-0 h-full w-full object-cover" alt="preview" />
+                    <button onClick={(e) => { e.stopPropagation(); set("imageUrl", ""); }} className="absolute top-2 right-2 h-8 w-8 grid place-items-center rounded-full bg-background/80"><X className="h-4 w-4" /></button>
+                  </>
+                ) : tab === "upload" || mode === "edit" ? (
+                  <div className="text-foreground/70">
+                    <Upload className="h-6 w-6 mx-auto mb-2" />
+                    <div className="font-medium">Drop or click</div>
+                    <div className="text-xs">PNG, JPG, WEBP</div>
+                  </div>
+                ) : (
+                  <div className="w-full px-3" onClick={(e) => e.stopPropagation()}>
+                    <Input placeholder="https://store.com/product.jpg" defaultValue="" onBlur={(e) => handleUrlImport(e.target.value)} className="bg-background/80" />
+                    <div className="text-xs text-foreground/60 mt-2">Paste any product image URL, then tab out</div>
+                  </div>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f, "front"); }} />
+              </div>
+              {s.imageUrl && (
+                <Button variant="outline" size="sm" className="w-full" disabled={analyzing} onClick={() => runAutoFill(s.imageUrl)}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> {analyzing ? "Reading…" : "Autofill more info"}
+                </Button>
               )}
-              <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f, "front"); }} />
+              <details className="glass rounded-xl px-3 py-2 text-sm">
+                <summary className="cursor-pointer">+ Add back / detail view</summary>
+                <div className="mt-2 space-y-2">
+                  <Input placeholder="Back image URL" value={s.backUrl} onChange={(e) => set("backUrl", e.target.value)} />
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+                    inp.onchange = () => { const f = inp.files?.[0]; if (f) handleFile(f, "back"); };
+                    inp.click();
+                  }}>Upload back image</Button>
+                  {s.backUrl && <img src={s.backUrl} className="h-24 rounded-lg object-cover" alt="back" />}
+                </div>
+              </details>
             </div>
-            <details className="glass rounded-xl px-3 py-2 text-sm">
-              <summary className="cursor-pointer">+ Add back / detail view</summary>
-              <div className="mt-2 space-y-2">
-                <Input placeholder="Back image URL" value={backUrl} onChange={(e) => setBackUrl(e.target.value)} />
-                <Button variant="outline" size="sm" onClick={() => {
-                  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
-                  inp.onchange = () => { const f = inp.files?.[0]; if (f) handleFile(f, "back"); };
-                  inp.click();
-                }}>Upload back image</Button>
-                {backUrl && <img src={backUrl} className="h-24 rounded-lg object-cover" alt="back" />}
-              </div>
-            </details>
-          </div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs uppercase tracking-widest text-muted-foreground">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lace corset top" />
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-widest text-muted-foreground">Category</label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {[...DEFAULT_CATEGORIES, ...customCategories].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <div className="flex gap-2 mt-2">
-                <Input placeholder="+ New category" value={newCat} onChange={(e) => setNewCat(e.target.value)} />
-                <Button variant="outline" size="icon" onClick={() => { if (newCat) { addCategory(newCat); setCategory(newCat); setNewCat(""); } }}><Plus className="h-4 w-4" /></Button>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs uppercase tracking-widest text-muted-foreground">Name</label>
+                <Input value={s.name} onChange={(e) => set("name", e.target.value)} placeholder="Lace corset top" />
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-widest text-muted-foreground">Category</label>
+                <Select value={s.category} onValueChange={(v) => { set("category", v); set("subcategory", ""); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {[...DEFAULT_CATEGORIES, ...customCategories].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <div className="flex gap-2 mt-2">
+                  <Input placeholder="+ New category" value={newCat} onChange={(e) => setNewCat(e.target.value)} />
+                  <Button variant="outline" size="icon" onClick={() => { if (newCat) { addCategory(newCat); set("category", newCat); setNewCat(""); } }}><Plus className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-widest text-muted-foreground">Subcategory</label>
+                {subOptions.length > 0 ? (
+                  <Select value={s.subcategory || "__none__"} onValueChange={(v) => set("subcategory", v === "__none__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {subOptions.map((sub) => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={s.subcategory} onChange={(e) => set("subcategory", e.target.value)} placeholder="e.g. crop top" />
+                )}
+                <div className="flex gap-2 mt-2">
+                  <Input placeholder="+ Add new subcategory" value={newSub} onChange={(e) => setNewSub(e.target.value)} />
+                  <Button variant="outline" size="icon" onClick={async () => {
+                    if (!newSub.trim()) return;
+                    await addSubcategory(s.category, newSub.trim());
+                    set("subcategory", newSub.trim());
+                    setNewSub("");
+                  }}><Plus className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Gender</label>
+                  <Select value={s.gender || "__any__"} onValueChange={(v) => set("gender", v === "__any__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">Any</SelectItem>
+                      {GENDERS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Season</label>
+                  <Select value={s.season || "__any__"} onValueChange={(v) => set("season", v === "__any__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">Any</SelectItem>
+                      {SEASONS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Price</label>
+                  <Input type="number" inputMode="decimal" value={s.price} onChange={(e) => set("price", e.target.value)} placeholder="0" />
+                </div>
+                <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Brand</label><Input value={s.brand} onChange={(e) => set("brand", e.target.value)} /></div>
+                <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Color</label><Input value={s.color} onChange={(e) => set("color", e.target.value)} placeholder="lavender" /></div>
+              </div>
+              <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Tags (comma)</label><Input value={s.tags} onChange={(e) => set("tags", e.target.value)} placeholder="goth, festival, lace" /></div>
+              <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Source URL</label><Input value={s.source} onChange={(e) => set("source", e.target.value)} /></div>
+              <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Notes</label><Textarea value={s.notes} onChange={(e) => set("notes", e.target.value)} rows={2} /></div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs uppercase tracking-widest text-muted-foreground">Custom fields</label>
+                  <Button variant="outline" size="sm" className="h-7" onClick={() => set("customFields", [...s.customFields, { label: "", value: "" }])}>
+                    <Plus className="h-3 w-3 mr-1" /> Add field
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {s.customFields.map((f, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input placeholder="Label" value={f.label} onChange={(e) => {
+                        const arr = [...s.customFields]; arr[idx] = { ...arr[idx], label: e.target.value }; set("customFields", arr);
+                      }} className="w-1/3" />
+                      <Input placeholder="Value" value={f.value} onChange={(e) => {
+                        const arr = [...s.customFields]; arr[idx] = { ...arr[idx], value: e.target.value }; set("customFields", arr);
+                      }} />
+                      <Button variant="ghost" size="icon" onClick={() => set("customFields", s.customFields.filter((_, i) => i !== idx))}><X className="h-4 w-4" /></Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Brand</label><Input value={brand} onChange={(e) => setBrand(e.target.value)} /></div>
-              <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Color</label><Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="lavender" /></div>
-            </div>
-            <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Tags (comma)</label><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="goth, festival, lace" /></div>
-            <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Source URL</label><Input value={source} onChange={(e) => setSource(e.target.value)} /></div>
-            <div><label className="text-xs uppercase tracking-widest text-muted-foreground">Notes</label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={submit} className="bg-glow text-primary-foreground shadow-glow">Save to closet</Button>
+        <DialogFooter className="px-6 py-4 border-t bg-background/40 flex-shrink-0">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={submit} disabled={saving} className="bg-glow text-primary-foreground shadow-glow">
+            {saving ? "Saving…" : (mode === "edit" ? "Save changes" : "Save to closet")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
