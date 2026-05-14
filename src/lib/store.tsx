@@ -33,12 +33,12 @@ export type ClosetItem = {
   color?: string; brand?: string; tags: string[]; notes?: string; source?: string;
   favorite?: boolean; createdAt: number;
   subcategory?: string; gender?: string; season?: string; price?: number;
-  customFields?: Record<string, string>;
+  customFields?: Record<string, string>; closetId?: string;
 };
 export type Model = {
   id: string; name: string; prompt: string; pose: string;
   baseImageUrl: string; currentImageUrl: string; history: string[];
-  wornItemIds: string[]; createdAt: number;
+  wornItemIds: string[]; createdAt: number; isChild?: boolean;
 };
 export type Look = { id: string; name: string; modelId: string; imageUrl: string; itemIds: string[]; notes?: string; createdAt: number };
 export type Collection = { id: string; name: string; description?: string; lookIds: string[]; cover?: string; createdAt: number };
@@ -47,6 +47,8 @@ export type Moodboard = { id: string; name: string; pins: MoodboardPin[]; palett
 
 type Theme = "pastel" | "astro" | "nature";
 
+export type Closet = { id: string; name: string; createdAt: number };
+
 type State = {
   user: User | null;
   loadingAuth: boolean;
@@ -54,6 +56,13 @@ type State = {
 
   theme: Theme;
   setTheme: (t: Theme) => void;
+
+  closets: Closet[];
+  activeClosetId: string | null;
+  setActiveClosetId: (id: string) => void;
+  addCloset: (name: string) => Promise<Closet | null>;
+  renameCloset: (id: string, name: string) => Promise<void>;
+  removeCloset: (id: string) => Promise<void>;
 
   items: ClosetItem[];
   addItem: (i: Omit<ClosetItem, "id" | "createdAt">) => Promise<ClosetItem | null>;
@@ -72,7 +81,7 @@ type State = {
   clearTray: () => void;
 
   models: Model[];
-  addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string }) => Promise<Model | null>;
+  addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string; isChild?: boolean }) => Promise<Model | null>;
   updateModelImage: (id: string, newUrl: string, addedItemId?: string) => Promise<void>;
   resetModel: (id: string) => Promise<void>;
   undoModel: (id: string) => Promise<void>;
@@ -108,13 +117,15 @@ const mapItem = (r: any): ClosetItem => ({
   season: r.season ?? undefined,
   price: r.price != null ? Number(r.price) : undefined,
   customFields: (r.custom_fields && typeof r.custom_fields === "object") ? r.custom_fields : {},
+  closetId: r.closet_id ?? undefined,
 });
+const mapCloset = (r: any): Closet => ({ id: r.id, name: r.name, createdAt: new Date(r.created_at).getTime() });
 const mapModel = (r: any): Model => ({
   id: r.id, name: r.name, prompt: r.prompt, pose: r.pose,
   baseImageUrl: r.base_image_url, currentImageUrl: r.current_image_url,
   history: Array.isArray(r.history) ? r.history : [],
   wornItemIds: Array.isArray(r.worn_item_ids) ? r.worn_item_ids : [],
-  createdAt: new Date(r.created_at).getTime(),
+  createdAt: new Date(r.created_at).getTime(), isChild: !!r.is_child,
 });
 const mapLook = (r: any): Look => ({
   id: r.id, name: r.name, modelId: r.model_id || "", imageUrl: r.image_url,
@@ -143,6 +154,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [subcategories, setSubcategories] = useState<{ id: string; category: string; name: string }[]>([]);
 
   const [items, setItems] = useState<ClosetItem[]>([]);
+  const [closets, setClosets] = useState<Closet[]>([]);
+  const [activeClosetId, setActiveClosetIdState] = useState<string | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [looks, setLooks] = useState<Look[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -156,12 +169,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if (p?.theme) setThemeState(p.theme);
       if (Array.isArray(p?.customCategories)) setCustomCategories(p.customCategories);
       if (Array.isArray(p?.studioTray)) setStudioTray(p.studioTray);
+      if (typeof p?.activeClosetId === "string") setActiveClosetIdState(p.activeClosetId);
     } catch {}
   }, []);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    localStorage.setItem(LOCAL_KEY, JSON.stringify({ theme, customCategories, studioTray }));
-  }, [theme, customCategories, studioTray]);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify({ theme, customCategories, studioTray, activeClosetId }));
+  }, [theme, customCategories, studioTray, activeClosetId]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     const r = document.documentElement;
@@ -185,7 +199,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   // Hydrate per-user data
   useEffect(() => {
     if (!user) {
-      setItems([]); setModels([]); setLooks([]); setCollections([]); setMoodboards([]);
+      setItems([]); setModels([]); setLooks([]); setCollections([]); setMoodboards([]); setClosets([]); setActiveClosetIdState(null);
       return;
     }
     (async () => {
@@ -203,6 +217,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if (mb.data) setMoodboards(mb.data.map(mapMoodboard));
       const sc = await (supabase.from as any)("closet_subcategories").select("*").order("created_at", { ascending: true });
       if (sc.data) setSubcategories(sc.data.map((r: any) => ({ id: r.id, category: r.category, name: r.name })));
+      const cl = await (supabase.from as any)("closets").select("*").order("created_at", { ascending: true });
+      let list: Closet[] = cl.data ? cl.data.map(mapCloset) : [];
+      if (list.length === 0) {
+        const ins = await (supabase.from as any)("closets").insert({ user_id: user.id, name: "My closet" }).select().single();
+        if (ins.data) list = [mapCloset(ins.data)];
+      }
+      setClosets(list);
+      setActiveClosetIdState((prev) => (prev && list.some((c) => c.id === prev)) ? prev : (list[0]?.id ?? null));
     })();
   }, [user?.id]);
 
@@ -216,9 +238,36 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (!trimmed) return;
     if (subcategories.some((s) => s.category === category && s.name.toLowerCase() === trimmed.toLowerCase())) return;
     const { data, error } = await (supabase.from as any)("closet_subcategories")
-      .insert({ user_id: uid, category, name: trimmed }).select().single();
+      .insert({ user_id: uid, category, name: trimmed, closet_id: activeClosetId }).select().single();
     if (error || !data) { console.error(error); return; }
     setSubcategories((p) => [...p, { id: data.id, category: data.category, name: data.name }]);
+  };
+
+  // Closets
+  const setActiveClosetId = (id: string) => setActiveClosetIdState(id);
+  const addCloset: State["addCloset"] = async (name) => {
+    const uid = requireUser();
+    const trimmed = name.trim() || "New closet";
+    const { data, error } = await (supabase.from as any)("closets").insert({ user_id: uid, name: trimmed }).select().single();
+    if (error || !data) { console.error(error); return null; }
+    const mapped = mapCloset(data);
+    setClosets((p) => [...p, mapped]);
+    setActiveClosetIdState(mapped.id);
+    return mapped;
+  };
+  const renameCloset: State["renameCloset"] = async (id, name) => {
+    const { error } = await (supabase.from as any)("closets").update({ name }).eq("id", id);
+    if (error) { console.error(error); return; }
+    setClosets((p) => p.map((c) => c.id === id ? { ...c, name } : c));
+  };
+  const removeCloset: State["removeCloset"] = async (id) => {
+    if (closets.length <= 1) return;
+    const { error } = await (supabase.from as any)("closets").delete().eq("id", id);
+    if (error) { console.error(error); return; }
+    const remaining = closets.filter((c) => c.id !== id);
+    setClosets(remaining);
+    setItems((p) => p.filter((it) => it.closetId !== id));
+    if (activeClosetId === id) setActiveClosetIdState(remaining[0]?.id ?? null);
   };
 
   const addToTray = (ids: string | string[]) => {
@@ -246,6 +295,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       season: i.season || null,
       price: typeof i.price === "number" ? i.price : null,
       custom_fields: i.customFields || {},
+      closet_id: activeClosetId,
     }).select().single();
     if (error || !data) { console.error(error); return null; }
     const mapped = mapItem(data);
@@ -286,7 +336,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from("models").insert({
       user_id: uid, name: m.name, prompt: m.prompt, pose: m.pose,
       base_image_url: m.baseImageUrl, current_image_url: current,
-      history: [], worn_item_ids: [],
+      history: [], worn_item_ids: [], is_child: !!m.isChild,
     }).select().single();
     if (error || !data) { console.error(error); return null; }
     const mapped = mapModel(data);
@@ -408,6 +458,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       user, loadingAuth, signOut,
       theme, setTheme,
+      closets, activeClosetId, setActiveClosetId, addCloset, renameCloset, removeCloset,
       items, addItem, updateItem, removeItem,
       customCategories, addCategory,
       subcategories, addSubcategory,

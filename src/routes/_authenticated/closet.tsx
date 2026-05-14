@@ -2,11 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { useStudio, DEFAULT_CATEGORIES, ClosetItem } from "@/lib/store";
 import { useEffect, useMemo, useRef, useState, ChangeEvent, DragEvent } from "react";
-import { Heart, Plus, Search, Trash2, Upload, Link as LinkIcon, X, Pencil, CheckSquare, Square, Wand2, Sparkles } from "lucide-react";
+import { Heart, Plus, Search, Trash2, Upload, Link as LinkIcon, X, Pencil, CheckSquare, Square, Wand2, Sparkles, FolderPlus, Shirt, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -34,7 +35,8 @@ const emptyForm = (): FormState => ({
 });
 
 function ClosetPage() {
-  const { items, addItem, updateItem, removeItem, customCategories, addCategory, subcategories, addSubcategory, addToTray } = useStudio();
+  const { items: allItems, addItem, updateItem, removeItem, customCategories, addCategory, subcategories, addSubcategory, addToTray,
+    closets, activeClosetId, setActiveClosetId, addCloset, renameCloset, removeCloset } = useStudio();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>("All");
   const [q, setQ] = useState("");
@@ -43,6 +45,14 @@ function ClosetPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<ClosetItem | null>(null);
   const [adding, setAdding] = useState(false);
+  const [newClosetOpen, setNewClosetOpen] = useState(false);
+  const [newClosetName, setNewClosetName] = useState("");
+
+  const items = useMemo(
+    () => allItems.filter((it) => !activeClosetId || !it.closetId || it.closetId === activeClosetId),
+    [allItems, activeClosetId]
+  );
+  const activeCloset = closets.find((c) => c.id === activeClosetId) || null;
 
   const allCats = useMemo(() => ["All", ...DEFAULT_CATEGORIES, ...customCategories], [customCategories]);
 
@@ -84,7 +94,51 @@ function ClosetPage() {
         <div>
           <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Your wardrobe</div>
           <h1 className="font-display text-4xl md:text-5xl mt-1">Closet</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Upload, tag, and prep items for the studio.</p>
+          <p className="text-muted-foreground mt-1 text-sm">Keep separate closets for yourself, a partner, a child, or a friend.</p>
+          <div className="mt-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-full gap-2">
+                  <Shirt className="h-4 w-4" />
+                  <span className="font-medium">{activeCloset?.name || "No closet"}</span>
+                  <span className="text-xs text-muted-foreground">({items.length})</span>
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Switch closet</DropdownMenuLabel>
+                {closets.map((c) => (
+                  <DropdownMenuItem key={c.id} onClick={() => setActiveClosetId(c.id)} className="flex items-center gap-2">
+                    <Shirt className="h-3.5 w-3.5" />
+                    <span className="flex-1 truncate">{c.name}</span>
+                    {c.id === activeClosetId && <Sparkles className="h-3 w-3 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setNewClosetOpen(true)}>
+                  <FolderPlus className="h-3.5 w-3.5 mr-2" /> New closet…
+                </DropdownMenuItem>
+                {activeCloset && (
+                  <DropdownMenuItem onClick={() => {
+                    const n = window.prompt("Rename closet", activeCloset.name);
+                    if (n && n.trim()) renameCloset(activeCloset.id, n.trim());
+                  }}>
+                    <Pencil className="h-3.5 w-3.5 mr-2" /> Rename current
+                  </DropdownMenuItem>
+                )}
+                {activeCloset && closets.length > 1 && (
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm(`Delete "${activeCloset.name}" and all its items?`)) removeCloset(activeCloset.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete current
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant={selectMode ? "default" : "outline"} className="rounded-full" onClick={() => { selectMode ? exitSelect() : setSelectMode(true); }}>
@@ -95,6 +149,24 @@ function ClosetPage() {
           </Button>
         </div>
       </header>
+
+      <Dialog open={newClosetOpen} onOpenChange={setNewClosetOpen}>
+        <DialogContent className="max-w-sm glass">
+          <DialogHeader><DialogTitle className="font-display text-2xl">New closet</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Give it a name — for example "Mia's wardrobe", "Travel capsule", or "Partner".</p>
+          <Input autoFocus value={newClosetName} onChange={(e) => setNewClosetName(e.target.value)} placeholder="Closet name" />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNewClosetOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-glow text-primary-foreground shadow-glow"
+              onClick={async () => {
+                const c = await addCloset(newClosetName || "New closet");
+                if (c) { toast.success(`Created "${c.name}" ✦`); setNewClosetName(""); setNewClosetOpen(false); }
+              }}
+            >Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-6 glass rounded-2xl p-3 flex flex-col md:flex-row gap-3 md:items-center">
         <div className="relative flex-1">
