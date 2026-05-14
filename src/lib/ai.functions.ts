@@ -350,3 +350,72 @@ export const mirrorRemoteImage = createServerFn({ method: "POST" })
       return { error: e?.message || "Fetch failed" };
     }
   });
+
+// Fetch a product page and extract canonical info from meta tags + JSON-LD.
+// Used as ground truth that overrides AI vision guesses.
+export const fetchProductInfo = createServerFn({ method: "POST" })
+  .inputValidator((d: { url: string }) => z.object({ url: z.string().url() }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const r = await fetch(data.url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; LookbookBot/1.0)" },
+        redirect: "follow",
+      });
+      if (!r.ok) return { error: `Could not load page (${r.status})` };
+      const ct = r.headers.get("content-type") || "";
+      if (!ct.includes("text/html")) return { error: "Not an HTML page" };
+      const html = (await r.text()).slice(0, 500_000);
+
+      const meta = (prop: string) => {
+        const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i");
+        const m = html.match(re); return m ? m[1].trim() : "";
+      };
+      const metaRev = (prop: string) => {
+        const re = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i");
+        const m = html.match(re); return m ? m[1].trim() : "";
+      };
+      const get = (p: string) => meta(p) || metaRev(p);
+
+      const result: Record<string, string | number> = {};
+      const title = get("og:title") || get("twitter:title") || (html.match(/<title>([^<]+)<\/title>/i)?.[1] ?? "").trim();
+      const desc  = get("og:description") || get("twitter:description") || get("description");
+      const brand = get("product:brand") || get("og:brand") || get("brand");
+      const price = get("product:price:amount") || get("og:price:amount") || get("price");
+      const color = get("product:color") || get("color");
+      const material = get("product:material") || get("material");
+
+      if (title) result.name = title.slice(0, 120);
+      if (brand) result.brand = brand.slice(0, 60);
+      if (color) result.color = color.slice(0, 30);
+      if (material) result.material = material.slice(0, 40);
+      if (price && !isNaN(Number(price))) result.price = Number(price);
+      if (desc)  result.description = desc.slice(0, 400);
+
+      // JSON-LD Product schema
+      const ldMatches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+      for (const m of ldMatches) {
+        try {
+          const blob = JSON.parse(m[1].trim());
+          const items = Array.isArray(blob) ? blob : (blob["@graph"] || [blob]);
+          for (const it of items) {
+            const t = it?.["@type"];
+            const isProduct = t === "Product" || (Array.isArray(t) && t.includes("Product"));
+            if (!isProduct) continue;
+            if (it.name && !result.name) result.name = String(it.name).slice(0, 120);
+            const b = typeof it.brand === "string" ? it.brand : it.brand?.name;
+            if (b && !result.brand) result.brand = String(b).slice(0, 60);
+            if (it.color && !result.color) result.color = String(it.color).slice(0, 30);
+            if (it.material && !result.material) result.material = String(it.material).slice(0, 40);
+            const offer = Array.isArray(it.offers) ? it.offers[0] : it.offers;
+            const p = offer?.price ?? offer?.lowPrice;
+            if (p && !result.price && !isNaN(Number(p))) result.price = Number(p);
+            if (it.category && !result.subcategory) result.subcategory = String(it.category).slice(0, 60);
+          }
+        } catch { /* ignore bad JSON-LD */ }
+      }
+
+      return { info: result };
+    } catch (e: any) {
+      return { error: e?.message || "Fetch failed" };
+    }
+  });
