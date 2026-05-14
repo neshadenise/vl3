@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sparkles, Plus, Trash2, Edit3, Upload, User } from "lucide-react";
+import { Sparkles, Plus, Trash2, Edit3, Upload, User, Baby } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { generateModel } from "@/lib/ai.functions";
@@ -76,6 +76,7 @@ function CreateModelDialog() {
   const [prompt, setPrompt] = useState("");
   const [pose, setPose] = useState(POSE_PRESETS[0]);
   const [busy, setBusy] = useState(false);
+  const [isChild, setIsChild] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -101,7 +102,7 @@ function CreateModelDialog() {
         modelPose = "Original photo pose";
       } else {
         if (!prompt.trim()) { toast.error("Describe your model first"); setBusy(false); return; }
-        const res = await generateModel({ data: { prompt, pose } });
+        const res = await generateModel({ data: { prompt, pose, isChild } });
         if (res.error || !res.dataUrl) { toast.error(res.error || "Generation failed"); setBusy(false); return; }
         url = await uploadDataUrl(res.dataUrl, "models");
         modelPrompt = prompt;
@@ -111,7 +112,7 @@ function CreateModelDialog() {
       const model = await addModel({
         name: name || (tab === "upload" ? "My photo" : "Untitled model"),
         prompt: modelPrompt, pose: modelPose,
-        baseImageUrl: url, currentImageUrl: url,
+        baseImageUrl: url, currentImageUrl: url, isChild: tab === "generate" ? isChild : false,
       });
       if (!model) { toast.error("Could not save model"); setBusy(false); return; }
       toast.success(tab === "upload" ? "Photo ready ✦" : "Model generated ✦");
@@ -145,9 +146,15 @@ function CreateModelDialog() {
           </TabsList>
 
           <TabsContent value="generate" className="space-y-3 mt-3">
+            <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${isChild ? "bg-glow text-primary-foreground shadow-glow border-transparent" : "glass"}`}>
+              <input type="checkbox" className="sr-only" checked={isChild} onChange={(e) => setIsChild(e.target.checked)} />
+              <Baby className="h-4 w-4" />
+              <span className="text-sm font-medium">This is a child model</span>
+              <span className="ml-auto text-[11px] opacity-80">Modest tank top + shorts base</span>
+            </label>
             <div>
               <label className="text-xs uppercase tracking-widest text-muted-foreground">Describe your model</label>
-              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="Tall androgynous person, soft freckles, natural curls, warm olive skin..." />
+              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder={isChild ? "Cheerful 7-year-old, curly brown hair, light brown skin, freckles..." : "Tall androgynous person, soft freckles, natural curls, warm olive skin..."} />
               <div className="mt-2 flex flex-wrap gap-1">
                 {MODEL_PROMPT_PRESETS.map((p) => (
                   <button key={p} type="button" onClick={() => setPrompt(p)} className="text-[10px] px-2 py-1 rounded-full glass hover:bg-accent">{p.split(",")[0]}</button>
