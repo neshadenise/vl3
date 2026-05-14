@@ -296,21 +296,41 @@ function ItemDialog({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setS((p) => ({ ...p, [k]: v }));
 
   const runAutoFill = async (url: string) => {
+    if (!url) return;
     setAnalyzing(true);
     try {
-      const res: any = await analyzeGarment({ data: { imageUrl: url } });
-      if (res?.error) { console.warn("analyzeGarment:", res.error); return; }
+      // Send all current field values as hints so the AI augments rather than overrides.
+      const hints: Record<string, string> = {};
+      if (s.name) hints.name = s.name;
+      if (s.category) hints.category = s.category;
+      if (s.subcategory) hints.subcategory = s.subcategory;
+      if (s.brand) hints.brand = s.brand;
+      if (s.color) hints.color = s.color;
+      if (s.gender) hints.gender = s.gender;
+      if (s.season) hints.season = s.season;
+      if (s.price) hints.price = s.price;
+      if (s.tags) hints.tags = s.tags;
+      if (s.notes) hints.notes = s.notes;
+      if (s.source) hints.source = s.source;
+
+      const res: any = await analyzeGarment({ data: { imageUrl: url, hints } });
+      if (res?.error) { toast.error(res.error); return; }
       setS((p) => ({
         ...p,
         name: p.name || res.name || p.name,
         category: p.category && p.category !== "Tops" ? p.category : (res.category || p.category),
+        subcategory: p.subcategory || res.subcategory || p.subcategory,
         brand: p.brand || res.brand || p.brand,
         color: p.color || res.color || p.color,
+        gender: p.gender || res.gender || p.gender,
+        season: p.season || res.season || p.season,
+        price: p.price || (res.price != null ? String(res.price) : p.price),
         tags: p.tags || (res.tags || []).join(", "),
       }));
       setAiSuggested(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error("autofill failed", e);
+      toast.error(e?.message || "Autofill failed");
     } finally { setAnalyzing(false); }
   };
 

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useStudio } from "@/lib/store";
-import { Sparkles, ArrowRight, Wand2, Shirt, BookHeart, Moon, Sun } from "lucide-react";
+import { Sparkles, ArrowRight, Wand2, Shirt, BookHeart, Moon, Sun, Leaf } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 
 export const Route = createFileRoute("/")({
@@ -10,6 +10,19 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const { user, theme, setTheme, models } = useStudio();
+  const THEMES = ["pastel", "astro", "nature"] as const;
+  type ThemeKey = typeof THEMES[number];
+  const META: Record<ThemeKey, { label: string; nextLabel: string; Icon: typeof Sun }> = {
+    pastel: { label: "Pastel goth",     nextLabel: "astro",  Icon: Moon },
+    astro:  { label: "Dark astrology",  nextLabel: "nature", Icon: Leaf },
+    nature: { label: "Green nature",    nextLabel: "pastel", Icon: Sun  },
+  };
+  const cycleTheme = () => {
+    const i = THEMES.indexOf(theme as ThemeKey);
+    setTheme(THEMES[(i + 1) % THEMES.length]);
+  };
+  const meta = META[theme as ThemeKey] ?? META.pastel;
+  const NextIcon = meta.Icon;
   const cta = user ? { to: "/closet", label: "Open your closet" } : { to: "/login", label: "Sign in to start" };
   const heroRef = useRef<HTMLDivElement>(null);
 
@@ -66,13 +79,13 @@ function Landing() {
         <div className="relative grid md:grid-cols-[1.15fr_1fr] gap-10 items-center">
           <div>
             <button
-              onClick={() => setTheme(theme === "pastel" ? "astro" : "pastel")}
+              onClick={cycleTheme}
               className="animate-rise inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs uppercase tracking-[0.25em] hover:shadow-glow transition"
-              title="Toggle theme"
+              title="Cycle theme"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-glow" />
-              {theme === "pastel" ? "Pastel goth · tap for astro" : "Dark astro · tap for pastel"}
-              {theme === "pastel" ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
+              {meta.label} · tap for {meta.nextLabel}
+              <NextIcon className="h-3 w-3" />
             </button>
 
             <h1 className="animate-rise-delay-1 mt-5 font-display text-5xl md:text-7xl leading-[1.02] text-foreground max-w-3xl">
@@ -162,18 +175,30 @@ function Landing() {
           <div className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full bg-glow opacity-30 blur-3xl animate-drift" />
           <div className="relative grid md:grid-cols-2 gap-6 items-center">
             <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Two moods</div>
-              <h3 className="font-display text-3xl mt-1">Pastel goth · Dark astrology</h3>
+              <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Three moods</div>
+              <h3 className="font-display text-3xl mt-1">Pastel goth · Dark astrology · Green nature</h3>
               <p className="text-sm text-muted-foreground mt-2">
-                The whole studio shifts with your mood. Lavender haze by day, celestial ink by night.
+                The whole studio shifts with your mood. Lavender haze, celestial ink, or verdant moss.
               </p>
-              <button
-                onClick={() => setTheme(theme === "pastel" ? "astro" : "pastel")}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-glow text-primary-foreground px-5 py-2.5 text-sm shadow-glow hover:scale-[1.03] transition"
-              >
-                {theme === "pastel" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                Try the {theme === "pastel" ? "astro" : "pastel"} theme
-              </button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {THEMES.map((t) => {
+                  const m = META[t];
+                  const Icon = m.Icon;
+                  const active = theme === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setTheme(t)}
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition hover:scale-[1.03] ${
+                        active ? "bg-glow text-primary-foreground shadow-glow" : "glass hover:shadow-glow"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex gap-3">
               <div className="flex-1 aspect-[3/4] rounded-2xl bg-dreamy animate-float" />

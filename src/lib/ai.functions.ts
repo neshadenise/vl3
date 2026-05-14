@@ -245,13 +245,46 @@ const ALLOWED_CATEGORIES = [
 ];
 
 export const analyzeGarment = createServerFn({ method: "POST" })
-  .inputValidator((d: { imageUrl: string }) => z.object({ imageUrl: z.string().min(5) }).parse(d))
+  .inputValidator((d: { imageUrl: string; hints?: Record<string, string | number | undefined> }) =>
+    z.object({
+      imageUrl: z.string().min(5),
+      hints: z.record(z.string(), z.union([z.string(), z.number()]).optional()).optional(),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { error: "LOVABLE_API_KEY not configured" };
     if (!isFetchableUrl(data.imageUrl)) return { error: "Image URL not fetchable" };
 
-    const sys = `You are a fashion product cataloger. Look at the garment/accessory image and return a compact JSON object with: name (short descriptive product name like "Black lace corset top"), category (MUST be one of: ${ALLOWED_CATEGORIES.join(", ")}), brand (visible brand name from logo/text, or empty string), color (single dominant color word), tags (array of 3-6 lowercase style tags, e.g. ["lace","goth","corset"]). Respond ONLY with valid JSON, no markdown.`;
+    // Normalize to data URL — Gateway often rejects external image URLs with 400.
+    let imageForAi: string;
+    try { imageForAi = await toDataUrl(data.imageUrl); }
+    catch (e: any) { return { error: e?.message || "Could not load image" }; }
+
+    const hintLines = data.hints
+      ? Object.entries(data.hints)
+          .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+          .map(([k, v]) => `- ${k}: ${v}`)
+          .join("\n")
+      : "";
+
+    const sys = `You are a fashion product cataloger. Look at the garment/accessory image AND any user-provided hints, then return a compact JSON object with these fields:
+- name: short descriptive product name (e.g. "Black lace corset top")
+- category: MUST be one of: ${ALLOWED_CATEGORIES.join(", ")}
+- subcategory: a more specific type within the category (e.g. "Crop top", "Wide-leg jeans", "Sneakers")
+- brand: visible brand from logo/text, or "" if none
+- color: single dominant color word
+- material: primary fabric/material if visible (e.g. "cotton", "leather"), or ""
+- gender: one of "Femme", "Masc", "Androgynous", "Unisex", "Kids", "Other"
+- season: one of "Spring", "Summer", "Fall", "Winter", "All-season"
+- price: estimated retail price as a number in USD, or null if you cannot tell
+- tags: 3-6 lowercase style tags, e.g. ["lace","goth","corset"]
+Use any user hints below as ground truth — do not contradict them; fill the rest from the image.
+Respond ONLY with valid JSON, no markdown.`;
+
+    const userText = hintLines
+      ? `Catalog this item. User-provided hints (treat as ground truth):\n${hintLines}`
+      : "Catalog this item.";
 
     const res = await fetch(GATEWAY, {
       method: "POST",
@@ -261,8 +294,8 @@ export const analyzeGarment = createServerFn({ method: "POST" })
         messages: [
           { role: "system", content: sys },
           { role: "user", content: [
-            { type: "text", text: "Catalog this item." },
-            { type: "image_url", image_url: { url: data.imageUrl } },
+            { type: "text", text: userText },
+            { type: "image_url", image_url: { url: imageForAi } },
           ]},
         ],
         response_format: { type: "json_object" },
@@ -272,18 +305,28 @@ export const analyzeGarment = createServerFn({ method: "POST" })
     if (!res.ok) {
       const body = await res.text();
       console.error("analyzeGarment error", res.status, body);
-      return { error: `AI error (${res.status})` };
+      return { error: `AI error (${res.status}): ${body.slice(0, 180)}` };
     }
     const j = await res.json();
     const raw = j?.choices?.[0]?.message?.content;
     try {
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
       const category = ALLOWED_CATEGORIES.includes(parsed?.category) ? parsed.category : "Tops";
+      const allowedGender = ["Femme","Masc","Androgynous","Unisex","Kids","Other"];
+      const allowedSeason = ["Spring","Summer","Fall","Winter","All-season"];
+      const priceNum = typeof parsed?.price === "number" ? parsed.price
+        : typeof parsed?.price === "string" && parsed.price.trim() !== "" && !isNaN(Number(parsed.price)) ? Number(parsed.price)
+        : null;
       return {
         name: String(parsed?.name || "").slice(0, 80),
         category,
+        subcategory: String(parsed?.subcategory || "").slice(0, 60),
         brand: String(parsed?.brand || "").slice(0, 60),
         color: String(parsed?.color || "").slice(0, 30),
+        material: String(parsed?.material || "").slice(0, 40),
+        gender: allowedGender.includes(parsed?.gender) ? parsed.gender : "",
+        season: allowedSeason.includes(parsed?.season) ? parsed.season : "",
+        price: priceNum,
         tags: Array.isArray(parsed?.tags) ? parsed.tags.map((t: any) => String(t).toLowerCase().slice(0, 24)).slice(0, 6) : [],
       };
     } catch (e) {
