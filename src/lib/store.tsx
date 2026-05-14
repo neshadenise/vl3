@@ -45,7 +45,7 @@ export type Collection = { id: string; name: string; description?: string; lookI
 export type MoodboardPin = { id: string; type: "image" | "note" | "swatch"; url?: string; text?: string; color?: string; x: number; y: number; w: number; h: number };
 export type Moodboard = { id: string; name: string; pins: MoodboardPin[]; palette: string[]; createdAt: number };
 
-type Theme = "pastel" | "astro";
+type Theme = "pastel" | "astro" | "nature";
 
 type State = {
   user: User | null;
@@ -165,7 +165,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof document === "undefined") return;
     const r = document.documentElement;
-    if (theme === "astro") r.classList.add("dark"); else r.classList.remove("dark");
+    r.classList.remove("dark", "nature");
+    if (theme === "astro") r.classList.add("dark");
+    else if (theme === "nature") r.classList.add("nature");
   }, [theme]);
 
   // Auth listener
