@@ -276,10 +276,11 @@ export const analyzeGarment = createServerFn({ method: "POST" })
 - color: single dominant color word
 - material: primary fabric/material if visible (e.g. "cotton", "leather"), or ""
 - gender: one of "Femme", "Masc", "Androgynous", "Unisex", "Kids", "Other"
-- season: one of "Spring", "Summer", "Fall", "Winter", "All-season"
+- season: an array of one or more of "Spring", "Summer", "Fall", "Winter", "All-season"
 - price: estimated retail price as a number in USD, or null if you cannot tell
 - tags: 3-6 lowercase style tags, e.g. ["lace","goth","corset"]
 Use any user hints below as ground truth — do not contradict them; fill the rest from the image.
+Hints prefixed "canonical_" come from the official product page/URL and are ABSOLUTE TRUTH — never override or reword them.
 Respond ONLY with valid JSON, no markdown.`;
 
     const userText = hintLines
@@ -314,6 +315,12 @@ Respond ONLY with valid JSON, no markdown.`;
       const category = ALLOWED_CATEGORIES.includes(parsed?.category) ? parsed.category : "Tops";
       const allowedGender = ["Femme","Masc","Androgynous","Unisex","Kids","Other"];
       const allowedSeason = ["Spring","Summer","Fall","Winter","All-season"];
+      let seasonOut = "";
+      if (Array.isArray(parsed?.season)) {
+        seasonOut = parsed.season.filter((x: any) => allowedSeason.includes(x)).join(", ");
+      } else if (typeof parsed?.season === "string" && allowedSeason.includes(parsed.season)) {
+        seasonOut = parsed.season;
+      }
       const priceNum = typeof parsed?.price === "number" ? parsed.price
         : typeof parsed?.price === "string" && parsed.price.trim() !== "" && !isNaN(Number(parsed.price)) ? Number(parsed.price)
         : null;
@@ -325,7 +332,7 @@ Respond ONLY with valid JSON, no markdown.`;
         color: String(parsed?.color || "").slice(0, 30),
         material: String(parsed?.material || "").slice(0, 40),
         gender: allowedGender.includes(parsed?.gender) ? parsed.gender : "",
-        season: allowedSeason.includes(parsed?.season) ? parsed.season : "",
+        season: seasonOut,
         price: priceNum,
         tags: Array.isArray(parsed?.tags) ? parsed.tags.map((t: any) => String(t).toLowerCase().slice(0, 24)).slice(0, 6) : [],
       };
