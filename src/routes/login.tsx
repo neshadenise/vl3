@@ -67,7 +67,7 @@ function LoginPage() {
           <span className="h-9 w-9 rounded-2xl bg-glow shadow-glow grid place-items-center text-primary-foreground"><Sparkles className="h-4 w-4" /></span>
           <span className="font-display text-xl">Virtual <span className="text-gradient">Lookbook</span></span>
         </Link>
-        <h1 className="font-display text-3xl">{mode === "signin" ? "Welcome back" : "Create your atelier"}</h1>
+        <h1 className="font-display text-3xl">{mode === "signin" ? "Welcome back" : "Create your studio"}</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {mode === "signin" ? "Sign in to your closet, models, and lookbook." : "Sign up to start styling your AI muse."}
         </p>

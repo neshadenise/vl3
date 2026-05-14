@@ -9,6 +9,49 @@ const IMAGE_MODEL_FALLBACKS = [
 ];
 const TEXT_MODEL = "google/gemini-2.5-flash";
 
+// Convert any https/http image URL into a base64 data URL.
+// Gemini sometimes rejects external URLs with "unsupported image format" / 400.
+// Sending the bytes inline is the most reliable path.
+async function toDataUrl(url: string): Promise<string> {
+  if (url.startsWith("data:image/")) return url;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Could not fetch image (${r.status})`);
+  let ct = r.headers.get("content-type") || "image/jpeg";
+  if (!ct.startsWith("image/")) ct = "image/jpeg";
+  // Gemini supports png/jpeg/webp/heic. Coerce unknowns to jpeg.
+  if (!/^image\/(png|jpe?g|webp|heic|heif|gif)$/i.test(ct)) ct = "image/jpeg";
+  const buf = await r.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  // Chunked base64 to avoid stack overflow on large images.
+  const CHUNK = 8192;
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+  }
+  const b64 = typeof Buffer !== "undefined" ? Buffer.from(buf).toString("base64") : btoa(bin);
+  return `data:${ct};base64,${b64}`;
+}
+
+async function normalizeContent(content: any): Promise<any> {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return content;
+  const out = [];
+  for (const part of content) {
+    if (part?.type === "image_url" && part?.image_url?.url) {
+      try {
+        const dataUrl = await toDataUrl(part.image_url.url);
+        out.push({ type: "image_url", image_url: { url: dataUrl } });
+      } catch (e) {
+        console.error("[ai] image fetch failed", e);
+        throw e;
+      }
+    } else {
+      out.push(part);
+    }
+  }
+  return out;
+}
+
 function extractImageUrl(data: any): string | undefined {
   const msg = data?.choices?.[0]?.message;
   if (!msg) return undefined;
@@ -39,12 +82,19 @@ async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?:
   const key = process.env.LOVABLE_API_KEY;
   if (!key) return { error: "LOVABLE_API_KEY not configured" };
 
+  let normalized: any;
+  try {
+    normalized = await normalizeContent(content);
+  } catch (e: any) {
+    return { error: e?.message || "Could not load reference image" };
+  }
+
   const res = await fetch(GATEWAY, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content }],
+      messages: [{ role: "user", content: normalized }],
       modalities: ["image", "text"],
     }),
   });
@@ -81,7 +131,7 @@ async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: st
 
 const FRAMING = `FULL BODY shot from the very top of the head to the soles of both feet, both feet fully visible inside the frame, generous headroom and footroom, vertical 3:4 portrait orientation, the subject occupies roughly 80% of the frame height and is centered, ABSOLUTELY NO cropping of head, hands, or feet.`;
 
-const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing a plain neutral beige fitted athletic base layer that fully covers the torso from collarbone to upper thigh (a snug crew-neck short-sleeve top tucked into matching high-waist fitted shorts), similar to seamless activewear. This is a fitting reference photo for catalog use. Fully clothed in the base layer, no skin exposed beyond a typical activewear silhouette. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
+const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing only basic plain neutral undergarments (a simple unbranded soft-cotton bralette or fitted tank-style undershirt and matching plain mid-rise briefs / boxer-briefs in a neutral nude or soft gray tone). This is a fitting base photo for catalog use, similar to a department-store fitting reference. Tasteful, modest, and SFW. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
 
 export const generateModel = createServerFn({ method: "POST" })
   .inputValidator((d: { prompt: string; pose?: string }) =>
@@ -94,6 +144,19 @@ export const generateModel = createServerFn({ method: "POST" })
   });
 
 const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background. Maintain ${FRAMING} Photorealistic editorial catalog style, modest and SFW, seamless, no collage artifacts.`;
+
+function coverageRule(category: string) {
+  const c = category.toLowerCase();
+  if (c.includes("top") || c.includes("jacket"))
+    return "The new top fully replaces any existing upper-body undergarment in the area it covers — no base bralette/undershirt should remain visible underneath where the garment covers. Keep the lower-body briefs unchanged.";
+  if (c.includes("bottom"))
+    return "The new bottoms fully replace the base briefs/boxer-briefs in the area they cover — no base underwear should remain visible underneath where the garment covers. Keep the upper-body base layer unchanged.";
+  if (c.includes("dress"))
+    return "The dress fully replaces the existing base undergarments in the area it covers (both top and bottom).";
+  if (c.includes("swim") || c.includes("lingerie"))
+    return "The new piece replaces the corresponding base undergarment in the area it covers.";
+  return "Layer the item naturally over the base undergarments without removing modest coverage in uncovered areas.";
+}
 
 function garmentPlacement(category: string) {
   const c = category.toLowerCase();
@@ -134,10 +197,10 @@ export const applyGarment = createServerFn({ method: "POST" })
 
     const text = `Create one safe fashion catalog virtual try-on image.
 
-IMAGE 1 is a fully clothed fitting model wearing a neutral base layer.
+IMAGE 1 is a fitting model wearing only plain neutral base undergarments (soft bralette/tank and plain briefs) — this is a catalog fitting base.
 IMAGE 2 is a product/reference photo for the garment only; ignore any person, skin, body, pose, or background in IMAGE 2.
 
-Edit IMAGE 1 so the model is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. Replace the neutral base layer only where this garment covers it; keep all other base-layer coverage modest and fully clothed. Do not output the original unedited model image. ${data.extraInstruction || ""}
+Edit IMAGE 1 so the model is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. ${coverageRule(data.garmentCategory)} Keep the result modest and SFW. Do not output the original unedited model image. ${data.extraInstruction || ""}
 
 ${KEEP}
 

@@ -29,7 +29,7 @@ function SettingsPage() {
   return (
     <AppLayout>
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Atelier preferences</div>
+        <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Studio preferences</div>
         <h1 className="font-display text-4xl md:text-5xl">Settings</h1>
       </header>
 
