@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useStudio } from "@/lib/store";
 import { Sparkles, ArrowRight, Wand2, Shirt, BookHeart, Moon, Sun } from "lucide-react";
-import { useEffect, useRef, useState, CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Virtual Lookbook · AI fashion studio" }] }),
@@ -9,9 +9,16 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
-  const { user, theme, setTheme } = useStudio();
+  const { user, theme, setTheme, models } = useStudio();
   const cta = user ? { to: "/closet", label: "Open your closet" } : { to: "/login", label: "Sign in to start" };
   const heroRef = useRef<HTMLDivElement>(null);
+
+  // Latest worked-on model: prefer styled render, fallback to base.
+  const latestModel = useMemo(() => {
+    if (!models?.length) return null;
+    return [...models].sort((a, b) => b.createdAt - a.createdAt)[0];
+  }, [models]);
+  const museImage = latestModel?.currentImageUrl || latestModel?.baseImageUrl || null;
 
   // Cursor spotlight
   const onMove = (e: React.MouseEvent) => {
@@ -111,7 +118,11 @@ function Landing() {
             </div>
             <div className="absolute left-1/2 -translate-x-1/2 top-8 animate-float">
               <div className="glass rounded-3xl p-3 w-44 shadow-soft">
-                <div className="aspect-[3/4] rounded-2xl bg-dreamy" />
+                <div className="aspect-[3/4] rounded-2xl bg-dreamy overflow-hidden">
+                  {museImage ? (
+                    <img src={museImage} alt="Your latest muse" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
                 <div className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Your muse</div>
               </div>
             </div>

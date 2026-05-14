@@ -21,12 +21,17 @@ export type Database = {
           category: string
           color: string | null
           created_at: string
+          custom_fields: Json
           favorite: boolean
+          gender: string | null
           id: string
           image_url: string
           name: string
           notes: string | null
+          price: number | null
+          season: string | null
           source: string | null
+          subcategory: string | null
           tags: string[]
           user_id: string
         }
@@ -36,12 +41,17 @@ export type Database = {
           category: string
           color?: string | null
           created_at?: string
+          custom_fields?: Json
           favorite?: boolean
+          gender?: string | null
           id?: string
           image_url: string
           name: string
           notes?: string | null
+          price?: number | null
+          season?: string | null
           source?: string | null
+          subcategory?: string | null
           tags?: string[]
           user_id: string
         }
@@ -51,13 +61,42 @@ export type Database = {
           category?: string
           color?: string | null
           created_at?: string
+          custom_fields?: Json
           favorite?: boolean
+          gender?: string | null
           id?: string
           image_url?: string
           name?: string
           notes?: string | null
+          price?: number | null
+          season?: string | null
           source?: string | null
+          subcategory?: string | null
           tags?: string[]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      closet_subcategories: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
           user_id?: string
         }
         Relationships: []

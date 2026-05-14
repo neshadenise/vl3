@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { useStudio, ClosetItem, Model } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Undo2, RotateCcw, Save, Plus, Loader2, Check } from "lucide-react";
+import { Sparkles, Undo2, RotateCcw, Save, Plus, Loader2, Check, X, Wand2, Shirt, Trash } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { applyGarment, restyleLook } from "@/lib/ai.functions";
@@ -26,8 +26,20 @@ const STYLE_CHIPS = [
   "drape the jacket over one shoulder",
 ];
 
+const POSE_CHIPS = [
+  "runway pose",
+  "walking pose",
+  "hands on hips",
+  "editorial pose",
+  "over-the-shoulder",
+  "leaning pose",
+  "sitting pose",
+];
+
+type Mode = "one" | "selected";
+
 function StudioPage() {
-  const { models, items, updateModelImage, undoModel, resetModel, saveLook } = useStudio();
+  const { models, items, updateModelImage, undoModel, resetModel, saveLook, studioTray, addToTray, removeFromTray, clearTray } = useStudio();
   const search = useSearch({ from: "/_authenticated/studio" });
   const [pickedId, setPickedId] = useState<string | undefined>(search.model);
   const modelId = pickedId || search.model || models[0]?.id;
@@ -35,6 +47,12 @@ function StudioPage() {
 
   const [busy, setBusy] = useState(false);
   const [styleInput, setStyleInput] = useState("");
+  const [mode, setMode] = useState<Mode>("one");
+
+  const trayItems = useMemo(
+    () => studioTray.map((id) => items.find((i) => i.id === id)).filter(Boolean) as ClosetItem[],
+    [studioTray, items],
+  );
 
   if (!model) {
     return (
@@ -49,43 +67,67 @@ function StudioPage() {
     );
   }
 
+  const applyOne = async (item: ClosetItem, baseUrl: string): Promise<string | null> => {
+    const res: any = await applyGarment({ data: {
+      baseImageUrl: baseUrl,
+      garmentImageUrl: item.imageUrl,
+      garmentName: item.name,
+      garmentCategory: item.category,
+      modelPrompt: model.prompt,
+      modelPose: model.pose,
+    }});
+    if (res.error || !res.dataUrl) { toast.error(res.error || `Try-on failed: ${item.name}`, { duration: 6000 }); return null; }
+    const url = await uploadDataUrl(res.dataUrl, "looks");
+    await updateModelImage(model.id, url, item.id);
+    return url;
+  };
+
   const tryOn = async (item: ClosetItem) => {
+    if (mode === "selected") {
+      if (studioTray.includes(item.id)) removeFromTray(item.id);
+      else addToTray(item.id);
+      return;
+    }
     setBusy(true);
     try {
-      const res: any = await applyGarment({ data: {
-        baseImageUrl: model.currentImageUrl,
-        garmentImageUrl: item.imageUrl,
-        garmentName: item.name,
-        garmentCategory: item.category,
-        modelPrompt: model.prompt,
-        modelPose: model.pose,
-      }});
-      console.log("[tryOn] response", { hasImage: !!res?.dataUrl, error: res?.error });
-      if (res.error || !res.dataUrl) { toast.error(res.error || "Try-on failed", { duration: 6000 }); return; }
-      const url = await uploadDataUrl(res.dataUrl, "looks");
-      updateModelImage(model.id, url, item.id);
+      await applyOne(item, model.currentImageUrl);
       toast.success(`${item.name} on ✦`);
-    } catch (e: any) {
-      console.error("[tryOn] failed", e);
-      toast.error(e?.message || "Failed", { duration: 6000 });
-    }
+    } catch (e: any) { console.error(e); toast.error(e?.message || "Failed", { duration: 6000 }); }
     finally { setBusy(false); }
   };
 
-  const restyle = async () => {
-    if (!styleInput.trim()) return;
+  const styleMe = async () => {
+    if (trayItems.length === 0) return;
+    setBusy(true);
+    let base = model.currentImageUrl;
+    try {
+      for (const it of trayItems) {
+        toast.message(`Applying ${it.name}…`);
+        const next = await applyOne(it, base);
+        if (!next) break;
+        base = next;
+      }
+      toast.success("Look styled ✦");
+    } catch (e: any) { toast.error(e?.message || "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const restyle = async (instruction: string) => {
+    if (!instruction.trim()) return;
     setBusy(true);
     try {
-      const res: any = await restyleLook({ data: { baseImageUrl: model.currentImageUrl, instruction: styleInput } });
+      const res: any = await restyleLook({ data: { baseImageUrl: model.currentImageUrl, instruction } });
       if (res.error || !res.dataUrl) { toast.error(res.error || "Restyle failed", { duration: 6000 }); return; }
       const url = await uploadDataUrl(res.dataUrl, "looks");
       updateModelImage(model.id, url);
       toast.success("Restyled ✦");
       setStyleInput("");
-    } catch (e: any) { console.error("[restyle] failed", e); toast.error(e?.message || "Failed"); }
+    } catch (e: any) { console.error(e); toast.error(e?.message || "Failed"); }
     finally { setBusy(false); }
   };
 
+  const applyPose = (pose: string) =>
+    restyle(`Change the model's pose to a ${pose}. Keep the outfit, framing, identity, lighting, and background unchanged.`);
 
   const save = () => {
     saveLook({ name: `${model.name} look`, modelId: model.id, imageUrl: model.currentImageUrl, itemIds: model.wornItemIds });
@@ -99,11 +141,18 @@ function StudioPage() {
           <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Styling studio</div>
           <h1 className="font-display text-3xl md:text-4xl mt-1">{model.name}</h1>
         </div>
-        {models.length > 1 && (
-          <select value={model.id} onChange={(e) => setPickedId(e.target.value)} className="glass rounded-full px-3 py-1.5 text-sm bg-background/60">
-            {models.map((m: Model) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Mode toggle */}
+          <div className="glass rounded-full p-1 flex text-xs">
+            <button onClick={() => setMode("one")} className={cn("px-3 py-1 rounded-full transition", mode === "one" && "bg-glow text-primary-foreground shadow-glow")}>One at a time</button>
+            <button onClick={() => setMode("selected")} className={cn("px-3 py-1 rounded-full transition", mode === "selected" && "bg-glow text-primary-foreground shadow-glow")}>Selected items</button>
+          </div>
+          {models.length > 1 && (
+            <select value={model.id} onChange={(e) => setPickedId(e.target.value)} className="glass rounded-full px-3 py-1.5 text-sm bg-background/60">
+              {models.map((m: Model) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
+        </div>
       </header>
 
       {/* Preview */}
@@ -126,6 +175,40 @@ function StudioPage() {
         </div>
       </div>
 
+      {/* Active styling tray */}
+      <section className="mt-5 glass rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Shirt className="h-4 w-4 text-primary" />
+            <h2 className="font-display text-lg">Active styling tray</h2>
+            <span className="text-xs text-muted-foreground">({trayItems.length})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {mode === "selected" && (
+              <Button size="sm" disabled={busy || trayItems.length === 0} onClick={styleMe} className="bg-glow text-primary-foreground shadow-glow">
+                <Wand2 className="h-3.5 w-3.5 mr-1" /> Style Me
+              </Button>
+            )}
+            <Button size="sm" variant="outline" disabled={busy || trayItems.length === 0} onClick={clearTray}>
+              <Trash className="h-3.5 w-3.5 mr-1" /> Hang up clothes
+            </Button>
+          </div>
+        </div>
+        {trayItems.length === 0 ? (
+          <div className="text-xs text-muted-foreground">Send items here from your closet to style in batches.</div>
+        ) : (
+          <div className="flex gap-2 flex-wrap">
+            {trayItems.map((it) => (
+              <div key={it.id} className="flex items-center gap-2 glass rounded-full pl-1 pr-2 py-1">
+                <div className="h-7 w-7 rounded-full overflow-hidden bg-dreamy"><img src={it.imageUrl} alt={it.name} className="h-full w-full object-cover" /></div>
+                <span className="text-xs">{it.name}</span>
+                <button onClick={() => removeFromTray(it.id)} className="h-5 w-5 grid place-items-center rounded-full hover:bg-accent"><X className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Closet strip */}
       <section className="mt-5">
         <div className="flex items-center justify-between mb-2">
@@ -140,12 +223,14 @@ function StudioPage() {
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
             {items.map((it: ClosetItem) => {
               const worn = model.wornItemIds.includes(it.id);
+              const inTray = studioTray.includes(it.id);
               return (
                 <button key={it.id} disabled={busy} onClick={() => tryOn(it)}
-                  className={cn("group shrink-0 w-24 text-left rounded-xl glass overflow-hidden hover:shadow-glow transition", busy && "opacity-50")}>
+                  className={cn("group shrink-0 w-24 text-left rounded-xl glass overflow-hidden hover:shadow-glow transition", busy && "opacity-50", inTray && "ring-2 ring-primary")}>
                   <div className="aspect-square bg-dreamy relative">
                     <img src={it.imageUrl} className="h-full w-full object-cover" alt={it.name} />
                     {worn && <div className="absolute top-1 right-1 h-5 w-5 grid place-items-center rounded-full bg-glow text-primary-foreground"><Check className="h-3 w-3" /></div>}
+                    {inTray && !worn && <div className="absolute top-1 left-1 h-5 w-5 grid place-items-center rounded-full bg-primary text-primary-foreground text-[10px]">+</div>}
                   </div>
                   <div className="px-2 py-1.5">
                     <div className="text-[11px] truncate font-medium">{it.name}</div>
@@ -158,13 +243,23 @@ function StudioPage() {
         )}
       </section>
 
+      {/* Pose tweaks */}
+      <section className="mt-5 glass rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2"><Sparkles className="h-4 w-4 text-primary" /><h2 className="font-display text-lg">Model pose</h2></div>
+        <div className="flex flex-wrap gap-1.5">
+          {POSE_CHIPS.map((p) => (
+            <button key={p} disabled={busy} onClick={() => applyPose(p)} className="text-xs px-3 py-1.5 rounded-full glass hover:bg-accent disabled:opacity-50">{p}</button>
+          ))}
+        </div>
+      </section>
+
       {/* AI styling prompt */}
       <section className="mt-5 glass rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-2"><Sparkles className="h-4 w-4 text-primary" /><h2 className="font-display text-lg">AI styling tweak</h2></div>
         <div className="flex gap-2">
           <Input value={styleInput} onChange={(e) => setStyleInput(e.target.value)} placeholder='"let the open shirt hang off the shoulders"'
-            onKeyDown={(e) => { if (e.key === "Enter") restyle(); }} disabled={busy} />
-          <Button onClick={restyle} disabled={busy || !styleInput.trim()} className="bg-glow text-primary-foreground shadow-glow">Apply</Button>
+            onKeyDown={(e) => { if (e.key === "Enter") restyle(styleInput); }} disabled={busy} />
+          <Button onClick={() => restyle(styleInput)} disabled={busy || !styleInput.trim()} className="bg-glow text-primary-foreground shadow-glow">Apply</Button>
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {STYLE_CHIPS.map((c) => (
