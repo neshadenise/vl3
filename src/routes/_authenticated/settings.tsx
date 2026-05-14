@@ -34,8 +34,8 @@ function SettingsPage() {
       </header>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Section title="Theme" desc="Switch between Pastel Goth and Dark Astrology.">
-          <div className="grid grid-cols-2 gap-3">
+        <Section title="Theme" desc="Pastel Goth, Dark Astrology, or Green Nature.">
+          <div className="grid grid-cols-3 gap-3">
             <button onClick={() => setTheme("pastel")} className={`rounded-2xl p-4 text-left ${theme === "pastel" ? "bg-glow text-primary-foreground shadow-glow" : "glass"}`}>
               <Sun className="h-4 w-4" />
               <div className="font-display text-lg mt-2">Pastel Goth</div>
@@ -45,6 +45,11 @@ function SettingsPage() {
               <Moon className="h-4 w-4" />
               <div className="font-display text-lg mt-2">Dark Astrology</div>
               <div className="text-xs opacity-80">Celestial · Silver · Navy</div>
+            </button>
+            <button onClick={() => setTheme("nature")} className={`rounded-2xl p-4 text-left ${theme === "nature" ? "bg-glow text-primary-foreground shadow-glow" : "glass"}`}>
+              <Leaf className="h-4 w-4" />
+              <div className="font-display text-lg mt-2">Green Nature</div>
+              <div className="text-xs opacity-80">Moss · Leaf · Sunlight</div>
             </button>
           </div>
         </Section>
