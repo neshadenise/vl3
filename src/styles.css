@@ -214,6 +214,31 @@
   .animate-float { animation: float-slow 6s ease-in-out infinite; }
   @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 20px -8px var(--lavender); } 50% { box-shadow: 0 0 50px -4px var(--lavender); } }
   .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+  @keyframes drift-x { 0%,100% { transform: translateX(-8px); } 50% { transform: translateX(8px); } }
+  .animate-drift { animation: drift-x 9s ease-in-out infinite; }
+  @keyframes shimmer-bg {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .animate-shimmer { background-size: 200% 200%; animation: shimmer-bg 12s ease-in-out infinite; }
+  @keyframes orbit-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .animate-orbit { animation: orbit-slow 28s linear infinite; }
+  @keyframes twinkle { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+  .animate-twinkle { animation: twinkle 3.5s ease-in-out infinite; }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-rise { animation: rise-in 0.9s cubic-bezier(.2,.7,.2,1) both; }
+  .animate-rise-delay-1 { animation: rise-in 0.9s 0.12s cubic-bezier(.2,.7,.2,1) both; }
+  .animate-rise-delay-2 { animation: rise-in 0.9s 0.24s cubic-bezier(.2,.7,.2,1) both; }
+  .animate-rise-delay-3 { animation: rise-in 0.9s 0.36s cubic-bezier(.2,.7,.2,1) both; }
+  .spotlight {
+    background: radial-gradient(600px circle at var(--mx, 50%) var(--my, 30%),
+      color-mix(in oklab, var(--lavender) 35%, transparent), transparent 60%);
+    transition: background 0.2s ease;
+  }
   .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--lavender) 60%, transparent); border-radius: 999px; }
 }

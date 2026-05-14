@@ -70,7 +70,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="mt-2 flex items-center justify-between px-2">
-            <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Atelier</span>
+            <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Studio</span>
             <ThemeToggle theme={theme} setTheme={setTheme} />
           </div>
 
