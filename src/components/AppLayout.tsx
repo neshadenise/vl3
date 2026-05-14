@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Moon, Sparkles, LayoutDashboard, Shirt, Wand2, UserRound, BookHeart, Layers3, Image as ImageIcon, Settings, Sun, Menu, X, LogOut } from "lucide-react";
+import { Moon, Sparkles, LayoutDashboard, Shirt, Wand2, UserRound, BookHeart, Layers3, Image as ImageIcon, Settings, Sun, Menu, X, LogOut, Leaf } from "lucide-react";
 import { useState } from "react";
 import { useStudio } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -113,17 +113,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ThemeToggle({ theme, setTheme }: { theme: "pastel" | "astro"; setTheme: (t: "pastel" | "astro") => void }) {
-  const next = theme === "pastel" ? "astro" : "pastel";
+type ThemeKey = "pastel" | "astro" | "nature";
+const THEME_ORDER: ThemeKey[] = ["pastel", "astro", "nature"];
+const THEME_META: Record<ThemeKey, { label: string; next: string; Icon: typeof Sun }> = {
+  pastel: { label: "Pastel", next: "Switch to Dark Astrology", Icon: Sun },
+  astro:  { label: "Astro",  next: "Switch to Green Nature",   Icon: Moon },
+  nature: { label: "Nature", next: "Switch to Pastel Goth",    Icon: Leaf },
+};
+function ThemeToggle({ theme, setTheme }: { theme: ThemeKey; setTheme: (t: ThemeKey) => void }) {
+  const idx = THEME_ORDER.indexOf(theme);
+  const next = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
+  const meta = THEME_META[theme];
+  const Icon = meta.Icon;
   return (
     <button
       onClick={() => setTheme(next)}
       aria-label="Switch theme"
       className="h-9 px-3 rounded-full glass flex items-center gap-2 text-xs hover:shadow-glow transition-shadow"
-      title={theme === "pastel" ? "Switch to Dark Astrology" : "Switch to Pastel Goth"}
+      title={meta.next}
     >
-      {theme === "pastel" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-      <span className="font-medium">{theme === "pastel" ? "Astro" : "Pastel"}</span>
+      <Icon className="h-3.5 w-3.5" />
+      <span className="font-medium">{meta.label}</span>
     </button>
   );
 }
