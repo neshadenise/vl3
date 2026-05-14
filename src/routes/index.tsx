@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useStudio } from "@/lib/store";
 import { Sparkles, ArrowRight, Wand2, Shirt, BookHeart, Moon, Sun } from "lucide-react";
-import { useEffect, useRef, useState, CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Virtual Lookbook · AI fashion studio" }] }),
