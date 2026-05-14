@@ -32,6 +32,8 @@ export type ClosetItem = {
   id: string; name: string; category: string; imageUrl: string; backUrl?: string;
   color?: string; brand?: string; tags: string[]; notes?: string; source?: string;
   favorite?: boolean; createdAt: number;
+  subcategory?: string; gender?: string; season?: string; price?: number;
+  customFields?: Record<string, string>;
 };
 export type Model = {
   id: string; name: string; prompt: string; pose: string;
@@ -60,6 +62,14 @@ type State = {
 
   customCategories: string[];
   addCategory: (c: string) => void;
+
+  subcategories: { id: string; category: string; name: string }[];
+  addSubcategory: (category: string, name: string) => Promise<void>;
+
+  studioTray: string[];
+  addToTray: (ids: string | string[]) => void;
+  removeFromTray: (id: string) => void;
+  clearTray: () => void;
 
   models: Model[];
   addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string }) => Promise<Model | null>;
@@ -93,6 +103,11 @@ const mapItem = (r: any): ClosetItem => ({
   backUrl: r.back_url ?? undefined, color: r.color ?? undefined, brand: r.brand ?? undefined,
   tags: r.tags || [], notes: r.notes ?? undefined, source: r.source ?? undefined,
   favorite: !!r.favorite, createdAt: new Date(r.created_at).getTime(),
+  subcategory: r.subcategory ?? undefined,
+  gender: r.gender ?? undefined,
+  season: r.season ?? undefined,
+  price: r.price != null ? Number(r.price) : undefined,
+  customFields: (r.custom_fields && typeof r.custom_fields === "object") ? r.custom_fields : {},
 });
 const mapModel = (r: any): Model => ({
   id: r.id, name: r.name, prompt: r.prompt, pose: r.pose,
@@ -124,6 +139,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const [theme, setThemeState] = useState<Theme>("pastel");
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [studioTray, setStudioTray] = useState<string[]>([]);
+  const [subcategories, setSubcategories] = useState<{ id: string; category: string; name: string }[]>([]);
 
   const [items, setItems] = useState<ClosetItem[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -138,12 +155,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const p = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
       if (p?.theme) setThemeState(p.theme);
       if (Array.isArray(p?.customCategories)) setCustomCategories(p.customCategories);
+      if (Array.isArray(p?.studioTray)) setStudioTray(p.studioTray);
     } catch {}
   }, []);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    localStorage.setItem(LOCAL_KEY, JSON.stringify({ theme, customCategories }));
-  }, [theme, customCategories]);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify({ theme, customCategories, studioTray }));
+  }, [theme, customCategories, studioTray]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     const r = document.documentElement;
@@ -181,12 +199,32 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if (lk.data) setLooks(lk.data.map(mapLook));
       if (co.data) setCollections(co.data.map(mapCollection));
       if (mb.data) setMoodboards(mb.data.map(mapMoodboard));
+      const sc = await (supabase.from as any)("closet_subcategories").select("*").order("created_at", { ascending: true });
+      if (sc.data) setSubcategories(sc.data.map((r: any) => ({ id: r.id, category: r.category, name: r.name })));
     })();
   }, [user?.id]);
 
   const signOut = useCallback(async () => { await supabase.auth.signOut(); }, []);
   const setTheme = useCallback((t: Theme) => setThemeState(t), []);
   const addCategory = (c: string) => setCustomCategories((p) => (p.includes(c) ? p : [...p, c]));
+
+  const addSubcategory: State["addSubcategory"] = async (category, name) => {
+    const uid = requireUser();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (subcategories.some((s) => s.category === category && s.name.toLowerCase() === trimmed.toLowerCase())) return;
+    const { data, error } = await (supabase.from as any)("closet_subcategories")
+      .insert({ user_id: uid, category, name: trimmed }).select().single();
+    if (error || !data) { console.error(error); return; }
+    setSubcategories((p) => [...p, { id: data.id, category: data.category, name: data.name }]);
+  };
+
+  const addToTray = (ids: string | string[]) => {
+    const arr = Array.isArray(ids) ? ids : [ids];
+    setStudioTray((p) => Array.from(new Set([...p, ...arr])));
+  };
+  const removeFromTray = (id: string) => setStudioTray((p) => p.filter((x) => x !== id));
+  const clearTray = () => setStudioTray([]);
 
   const requireUser = () => {
     if (!user) throw new Error("Sign in required");
@@ -201,6 +239,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       back_url: i.backUrl || null, color: i.color || null, brand: i.brand || null,
       tags: i.tags || [], notes: i.notes || null, source: i.source || null,
       favorite: !!i.favorite,
+      subcategory: i.subcategory || null,
+      gender: i.gender || null,
+      season: i.season || null,
+      price: typeof i.price === "number" ? i.price : null,
+      custom_fields: i.customFields || {},
     }).select().single();
     if (error || !data) { console.error(error); return null; }
     const mapped = mapItem(data);
@@ -219,6 +262,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (patch.notes !== undefined) dbPatch.notes = patch.notes;
     if (patch.source !== undefined) dbPatch.source = patch.source;
     if (patch.favorite !== undefined) dbPatch.favorite = patch.favorite;
+    if (patch.subcategory !== undefined) dbPatch.subcategory = patch.subcategory || null;
+    if (patch.gender !== undefined) dbPatch.gender = patch.gender || null;
+    if (patch.season !== undefined) dbPatch.season = patch.season || null;
+    if (patch.price !== undefined) dbPatch.price = (patch.price as any) === "" ? null : patch.price;
+    if (patch.customFields !== undefined) dbPatch.custom_fields = patch.customFields || {};
     const { error } = await supabase.from("closet_items").update(dbPatch).eq("id", id);
     if (error) { console.error(error); return; }
     setItems((p) => p.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -360,6 +408,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       theme, setTheme,
       items, addItem, updateItem, removeItem,
       customCategories, addCategory,
+      subcategories, addSubcategory,
+      studioTray, addToTray, removeFromTray, clearTray,
       models, addModel, updateModelImage, resetModel, undoModel, removeModel, renameModel,
       looks, saveLook, removeLook,
       collections, addCollection, addLookToCollection, removeCollection,
