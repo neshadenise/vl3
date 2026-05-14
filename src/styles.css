@@ -167,6 +167,62 @@
   --sidebar-ring: oklch(0.7 0.1 280);
 }
 
+/* GREEN NATURE — verdant moss, fresh leaf, warm wood, soft sunlight */
+.nature {
+  --background: oklch(0.97 0.025 130);
+  --foreground: oklch(0.22 0.06 150);
+
+  --card: oklch(0.99 0.018 125);
+  --card-foreground: oklch(0.22 0.06 150);
+
+  --popover: oklch(0.99 0.018 125);
+  --popover-foreground: oklch(0.22 0.06 150);
+
+  --primary: oklch(0.42 0.12 150);
+  --primary-foreground: oklch(0.98 0.02 120);
+
+  --secondary: oklch(0.92 0.06 130);
+  --secondary-foreground: oklch(0.28 0.08 150);
+
+  --muted: oklch(0.94 0.035 125);
+  --muted-foreground: oklch(0.5 0.05 145);
+
+  --accent: oklch(0.82 0.13 135);
+  --accent-foreground: oklch(0.22 0.07 150);
+
+  --destructive: oklch(0.62 0.21 28);
+  --destructive-foreground: oklch(0.98 0.01 120);
+
+  --border: oklch(0.88 0.05 135);
+  --input: oklch(0.93 0.04 130);
+  --ring: oklch(0.65 0.15 145);
+
+  --lavender: oklch(0.72 0.16 145);
+  --blush: oklch(0.85 0.1 95);
+  --ice: oklch(0.88 0.08 175);
+  --silver: oklch(0.82 0.02 130);
+  --ink: oklch(0.2 0.06 150);
+
+  --gradient-dreamy: linear-gradient(135deg, oklch(0.9 0.1 135) 0%, oklch(0.92 0.08 95) 50%, oklch(0.88 0.09 175) 100%);
+  --gradient-haze: radial-gradient(ellipse at top, oklch(0.88 0.13 140 / 0.55), transparent 60%),
+                   radial-gradient(ellipse at bottom right, oklch(0.9 0.1 95 / 0.5), transparent 60%);
+  --gradient-glow: linear-gradient(135deg, oklch(0.55 0.18 145), oklch(0.7 0.16 120));
+  --gradient-ink: linear-gradient(135deg, oklch(0.25 0.07 150), oklch(0.35 0.09 145));
+
+  --shadow-soft: 0 8px 30px -12px oklch(0.55 0.15 145 / 0.35);
+  --shadow-glow: 0 0 40px -8px oklch(0.6 0.2 145 / 0.55);
+  --shadow-ring: 0 0 0 1px oklch(0.82 0.07 135 / 0.6), 0 10px 35px -15px oklch(0.45 0.12 145 / 0.35);
+
+  --sidebar: oklch(0.96 0.03 130);
+  --sidebar-foreground: oklch(0.24 0.07 150);
+  --sidebar-primary: oklch(0.5 0.15 145);
+  --sidebar-primary-foreground: oklch(0.99 0.02 120);
+  --sidebar-accent: oklch(0.92 0.06 135);
+  --sidebar-accent-foreground: oklch(0.24 0.07 150);
+  --sidebar-border: oklch(0.88 0.05 135);
+  --sidebar-ring: oklch(0.65 0.15 145);
+}
+
 @layer base {
   * { border-color: var(--color-border); }
   html, body { background-color: var(--color-background); color: var(--color-foreground); }
@@ -210,6 +266,64 @@
   }
   .dark .stars { opacity: 1; }
   :root:not(.dark) .stars { opacity: 0; }
+  .nature .stars { opacity: 0 !important; }
+
+  /* Drifting leaves — only visible in nature theme */
+  .leaves {
+    background-image:
+      radial-gradient(8px 4px at 12% 20%, oklch(0.55 0.18 145 / 0.35), transparent 60%),
+      radial-gradient(10px 5px at 78% 35%, oklch(0.6 0.2 130 / 0.3), transparent 60%),
+      radial-gradient(7px 3px at 30% 70%, oklch(0.5 0.16 150 / 0.35), transparent 60%),
+      radial-gradient(9px 4px at 88% 80%, oklch(0.62 0.18 110 / 0.3), transparent 60%),
+      radial-gradient(6px 3px at 55% 50%, oklch(0.58 0.17 140 / 0.35), transparent 60%);
+    background-size: 100% 100%;
+    opacity: 0;
+  }
+  .nature .leaves { opacity: 1; animation: leaf-drift 22s ease-in-out infinite alternate; }
+  @keyframes leaf-drift {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; transform: translateY(0); }
+    50%  { background-position: 4% 6%, -3% 5%, 5% -4%, -4% 7%, 3% -3%; }
+    100% { background-position: -2% 8%, 4% -5%, -3% 6%, 5% -4%, -4% 5%; transform: translateY(-6px); }
+  }
+
+  /* Petals — only visible in pastel theme */
+  .petals {
+    background-image:
+      radial-gradient(5px 5px at 18% 22%, oklch(0.9 0.08 340 / 0.55), transparent 60%),
+      radial-gradient(4px 4px at 72% 38%, oklch(0.88 0.1 305 / 0.5), transparent 60%),
+      radial-gradient(5px 5px at 38% 75%, oklch(0.9 0.07 15 / 0.55), transparent 60%),
+      radial-gradient(3px 3px at 84% 82%, oklch(0.9 0.08 305 / 0.5), transparent 60%);
+    opacity: 0;
+  }
+  :root:not(.dark):not(.nature) .petals { opacity: 1; animation: petal-fall 18s linear infinite; }
+  @keyframes petal-fall {
+    0%   { background-position: 0% -10%, 0% -10%, 0% -10%, 0% -10%; }
+    100% { background-position: 4% 110%, -3% 110%, 5% 110%, -4% 110%; }
+  }
+
+  /* Animated theme-tinted aura behind body */
+  body::before {
+    content: "";
+    position: fixed; inset: -20%;
+    z-index: -1;
+    background: var(--gradient-haze);
+    filter: blur(40px);
+    opacity: 0.55;
+    animation: aura-shift 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  @keyframes aura-shift {
+    0%   { transform: translate3d(0,0,0) scale(1);   }
+    50%  { transform: translate3d(2%, -1%, 0) scale(1.05); }
+    100% { transform: translate3d(-2%, 2%, 0) scale(1.02); }
+  }
+
+  /* Stars twinkle in astro */
+  .dark .stars { animation: stars-twinkle 6s ease-in-out infinite; }
+  @keyframes stars-twinkle {
+    0%, 100% { opacity: 0.85; filter: brightness(1); }
+    50%      { opacity: 1;    filter: brightness(1.4); }
+  }
   @keyframes float-slow { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-12px) rotate(2deg); } }
   .animate-float { animation: float-slow 6s ease-in-out infinite; }
   @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 20px -8px var(--lavender); } 50% { box-shadow: 0 0 50px -4px var(--lavender); } }
