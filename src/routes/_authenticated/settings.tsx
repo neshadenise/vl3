@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { useStudio } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Moon, Sun, Trash2, Download, Lock } from "lucide-react";
+import { Moon, Sun, Trash2, Download, Lock, Leaf } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings · Virtual Lookbook" }] }),
