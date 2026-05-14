@@ -25,7 +25,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen relative">
-      <div className="pointer-events-none fixed inset-0 stars opacity-100" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 stars" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 petals" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 leaves" aria-hidden />
 
       {/* Top bar (mobile) */}
       <header className="md:hidden sticky top-0 z-40 glass">
