@@ -133,13 +133,16 @@ const FRAMING = `FULL BODY shot from the very top of the head to the soles of bo
 
 const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing only basic plain neutral undergarments (a simple unbranded soft-cotton bralette or fitted tank-style undershirt and matching plain mid-rise briefs / boxer-briefs in a neutral nude or soft gray tone). This is a fitting base photo for catalog use, similar to a department-store fitting reference. Tasteful, modest, and SFW. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
 
+const CHILD_BASE_PROMPT = `Photorealistic editorial children's lookbook photograph, fully modest, age-appropriate and SFW. ${FRAMING} Single child subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, natural proportions, calm friendly expression. The child is wearing a simple plain fitted cotton tank top and modest knee-length athletic shorts in a neutral soft gray or sand tone — fully covering torso and upper legs (NO underwear-only, NO swimwear, NO bare midriff, NO bare thighs above the knee). This is a fitting base photo for a kids' catalog. Tasteful, modest, age-appropriate, no sexualization, no makeup, no jewelry. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
+
 export const generateModel = createServerFn({ method: "POST" })
-  .inputValidator((d: { prompt: string; pose?: string }) =>
-    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional() }).parse(d),
+  .inputValidator((d: { prompt: string; pose?: string; isChild?: boolean }) =>
+    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional(), isChild: z.boolean().optional() }).parse(d),
   )
   .handler(async ({ data }) => {
     const poseLine = data.pose ? `Pose: ${data.pose}.` : "Pose: standing neutral, arms relaxed at sides.";
-    const prompt = `${BASE_PROMPT}\n\nSubject description: ${data.prompt}.\n${poseLine}`;
+    const base = data.isChild ? CHILD_BASE_PROMPT : BASE_PROMPT;
+    const prompt = `${base}\n\nSubject description: ${data.prompt}.\n${poseLine}`;
     return callImageAI(prompt);
   });
 
