@@ -33,7 +33,7 @@ export type ClosetItem = {
   color?: string; brand?: string; tags: string[]; notes?: string; source?: string;
   favorite?: boolean; createdAt: number;
   subcategory?: string; gender?: string; season?: string; price?: number;
-  customFields?: Record<string, string>;
+  customFields?: Record<string, string>; closetId?: string;
 };
 export type Model = {
   id: string; name: string; prompt: string; pose: string;
@@ -117,6 +117,7 @@ const mapItem = (r: any): ClosetItem => ({
   season: r.season ?? undefined,
   price: r.price != null ? Number(r.price) : undefined,
   customFields: (r.custom_fields && typeof r.custom_fields === "object") ? r.custom_fields : {},
+  closetId: r.closet_id ?? undefined,
 });
 const mapCloset = (r: any): Closet => ({ id: r.id, name: r.name, createdAt: new Date(r.created_at).getTime() });
 const mapModel = (r: any): Model => ({
@@ -265,7 +266,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (error) { console.error(error); return; }
     const remaining = closets.filter((c) => c.id !== id);
     setClosets(remaining);
-    setItems((p) => p.filter((it: any) => (it as any).closetId !== id));
+    setItems((p) => p.filter((it) => it.closetId !== id));
     if (activeClosetId === id) setActiveClosetIdState(remaining[0]?.id ?? null);
   };
 
