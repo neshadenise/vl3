@@ -19,6 +19,7 @@ export type Database = {
           back_url: string | null
           brand: string | null
           category: string
+          closet_id: string | null
           color: string | null
           created_at: string
           custom_fields: Json
@@ -39,6 +40,7 @@ export type Database = {
           back_url?: string | null
           brand?: string | null
           category: string
+          closet_id?: string | null
           color?: string | null
           created_at?: string
           custom_fields?: Json
@@ -59,6 +61,7 @@ export type Database = {
           back_url?: string | null
           brand?: string | null
           category?: string
+          closet_id?: string | null
           color?: string | null
           created_at?: string
           custom_fields?: Json
@@ -75,11 +78,20 @@ export type Database = {
           tags?: string[]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "closet_items_closet_id_fkey"
+            columns: ["closet_id"]
+            isOneToOne: false
+            referencedRelation: "closets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       closet_subcategories: {
         Row: {
           category: string
+          closet_id: string | null
           created_at: string
           id: string
           name: string
@@ -87,6 +99,7 @@ export type Database = {
         }
         Insert: {
           category: string
+          closet_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -94,6 +107,36 @@ export type Database = {
         }
         Update: {
           category?: string
+          closet_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closet_subcategories_closet_id_fkey"
+            columns: ["closet_id"]
+            isOneToOne: false
+            referencedRelation: "closets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      closets: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
           created_at?: string
           id?: string
           name?: string
@@ -171,6 +214,7 @@ export type Database = {
           current_image_url: string
           history: Json
           id: string
+          is_child: boolean
           name: string
           pose: string
           prompt: string
@@ -183,6 +227,7 @@ export type Database = {
           current_image_url: string
           history?: Json
           id?: string
+          is_child?: boolean
           name: string
           pose: string
           prompt: string
@@ -195,6 +240,7 @@ export type Database = {
           current_image_url?: string
           history?: Json
           id?: string
+          is_child?: boolean
           name?: string
           pose?: string
           prompt?: string
