@@ -266,6 +266,64 @@
   }
   .dark .stars { opacity: 1; }
   :root:not(.dark) .stars { opacity: 0; }
+  .nature .stars { opacity: 0 !important; }
+
+  /* Drifting leaves — only visible in nature theme */
+  .leaves {
+    background-image:
+      radial-gradient(8px 4px at 12% 20%, oklch(0.55 0.18 145 / 0.35), transparent 60%),
+      radial-gradient(10px 5px at 78% 35%, oklch(0.6 0.2 130 / 0.3), transparent 60%),
+      radial-gradient(7px 3px at 30% 70%, oklch(0.5 0.16 150 / 0.35), transparent 60%),
+      radial-gradient(9px 4px at 88% 80%, oklch(0.62 0.18 110 / 0.3), transparent 60%),
+      radial-gradient(6px 3px at 55% 50%, oklch(0.58 0.17 140 / 0.35), transparent 60%);
+    background-size: 100% 100%;
+    opacity: 0;
+  }
+  .nature .leaves { opacity: 1; animation: leaf-drift 22s ease-in-out infinite alternate; }
+  @keyframes leaf-drift {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; transform: translateY(0); }
+    50%  { background-position: 4% 6%, -3% 5%, 5% -4%, -4% 7%, 3% -3%; }
+    100% { background-position: -2% 8%, 4% -5%, -3% 6%, 5% -4%, -4% 5%; transform: translateY(-6px); }
+  }
+
+  /* Petals — only visible in pastel theme */
+  .petals {
+    background-image:
+      radial-gradient(5px 5px at 18% 22%, oklch(0.9 0.08 340 / 0.55), transparent 60%),
+      radial-gradient(4px 4px at 72% 38%, oklch(0.88 0.1 305 / 0.5), transparent 60%),
+      radial-gradient(5px 5px at 38% 75%, oklch(0.9 0.07 15 / 0.55), transparent 60%),
+      radial-gradient(3px 3px at 84% 82%, oklch(0.9 0.08 305 / 0.5), transparent 60%);
+    opacity: 0;
+  }
+  :root:not(.dark):not(.nature) .petals { opacity: 1; animation: petal-fall 18s linear infinite; }
+  @keyframes petal-fall {
+    0%   { background-position: 0% -10%, 0% -10%, 0% -10%, 0% -10%; }
+    100% { background-position: 4% 110%, -3% 110%, 5% 110%, -4% 110%; }
+  }
+
+  /* Animated theme-tinted aura behind body */
+  body::before {
+    content: "";
+    position: fixed; inset: -20%;
+    z-index: -1;
+    background: var(--gradient-haze);
+    filter: blur(40px);
+    opacity: 0.55;
+    animation: aura-shift 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  @keyframes aura-shift {
+    0%   { transform: translate3d(0,0,0) scale(1);   }
+    50%  { transform: translate3d(2%, -1%, 0) scale(1.05); }
+    100% { transform: translate3d(-2%, 2%, 0) scale(1.02); }
+  }
+
+  /* Stars twinkle in astro */
+  .dark .stars { animation: stars-twinkle 6s ease-in-out infinite; }
+  @keyframes stars-twinkle {
+    0%, 100% { opacity: 0.85; filter: brightness(1); }
+    50%      { opacity: 1;    filter: brightness(1.4); }
+  }
   @keyframes float-slow { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-12px) rotate(2deg); } }
   .animate-float { animation: float-slow 6s ease-in-out infinite; }
   @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 20px -8px var(--lavender); } 50% { box-shadow: 0 0 50px -4px var(--lavender); } }
