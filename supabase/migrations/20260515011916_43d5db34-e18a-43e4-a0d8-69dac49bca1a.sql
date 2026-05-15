@@ -1,0 +1,1 @@
+ALTER TABLE public.models ADD COLUMN IF NOT EXISTS is_infant boolean NOT NULL DEFAULT false;

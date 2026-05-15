@@ -135,13 +135,23 @@ const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modes
 
 const CHILD_BASE_PROMPT = `Photorealistic editorial children's lookbook photograph, fully modest, age-appropriate and SFW. ${FRAMING} Single child subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, natural proportions, calm friendly expression. The child is wearing a simple plain fitted cotton tank top and modest knee-length athletic shorts in a neutral soft gray or sand tone — fully covering torso and upper legs (NO underwear-only, NO swimwear, NO bare midriff, NO bare thighs above the knee). This is a fitting base photo for a kids' catalog. Tasteful, modest, age-appropriate, no sexualization, no makeup, no jewelry. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
 
+
+
+const INFANT_FRAMING = `Top-down (overhead) photograph looking straight down at the infant lying flat on a soft neutral blanket. The entire baby from head to toes is fully inside the frame with generous margin, vertical 3:4 orientation, infant centered, no cropping of head, hands, or feet.`;
+
+const INFANT_BASE_PROMPT = `Photorealistic editorial baby/infant catalog photograph, fully modest, age-appropriate and SFW. ${INFANT_FRAMING} Single calm infant lying on their back on a soft cream or oatmeal knit blanket, neutral seamless backdrop, soft diffused natural light, sharp focus, gentle peaceful expression. The infant is wearing a plain neutral short-sleeve cotton onesie/bodysuit in a soft natural tone, fully covering torso and diaper area. NO bare diaper, NO underwear-only, NO swimwear, NO suggestive posing. Hands and feet visible and relaxed. This is a fitting base photo for a baby clothing catalog so the infant can later be dressed in different baby garments.`;
+
+const KEEP_INFANT = `Preserve the infant's face, body proportions, skin tone, hair, pose, blanket, lighting, and the soft neutral backdrop. Maintain ${INFANT_FRAMING} Photorealistic editorial baby catalog style, fully modest, age-appropriate, SFW, no collage artifacts. Render the garment ACCURATELY on the infant: copy the garment color, fabric, print, neckline, sleeves, and silhouette faithfully. Do not sexualize or restyle the baby; focus only on rendering the clothing correctly.`;
+
 export const generateModel = createServerFn({ method: "POST" })
-  .inputValidator((d: { prompt: string; pose?: string; isChild?: boolean }) =>
-    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional(), isChild: z.boolean().optional() }).parse(d),
+  .inputValidator((d: { prompt: string; pose?: string; isChild?: boolean; isInfant?: boolean }) =>
+    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional(), isChild: z.boolean().optional(), isInfant: z.boolean().optional() }).parse(d),
   )
   .handler(async ({ data }) => {
-    const poseLine = data.pose ? `Pose: ${data.pose}.` : "Pose: standing neutral, arms relaxed at sides.";
-    const base = data.isChild ? CHILD_BASE_PROMPT : BASE_PROMPT;
+    const base = data.isInfant ? INFANT_BASE_PROMPT : data.isChild ? CHILD_BASE_PROMPT : BASE_PROMPT;
+    const poseLine = data.isInfant
+      ? "Pose: infant lying calmly on back, top-down camera angle."
+      : (data.pose ? `Pose: ${data.pose}.` : "Pose: standing neutral, arms relaxed at sides.");
     const prompt = `${base}\n\nSubject description: ${data.prompt}.\n${poseLine}`;
     return callImageAI(prompt);
   });
@@ -183,6 +193,7 @@ export const applyGarment = createServerFn({ method: "POST" })
     modelPrompt?: string;
     modelPose?: string;
     extraInstruction?: string;
+    isInfant?: boolean;
   }) =>
     z.object({
       baseImageUrl: z.string().min(5),
@@ -192,6 +203,7 @@ export const applyGarment = createServerFn({ method: "POST" })
       modelPrompt: z.string().max(500).optional(),
       modelPose: z.string().max(80).optional(),
       extraInstruction: z.string().max(400).optional(),
+      isInfant: z.boolean().optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -200,12 +212,12 @@ export const applyGarment = createServerFn({ method: "POST" })
 
     const text = `Create one safe fashion catalog virtual try-on image.
 
-IMAGE 1 is a fitting model wearing only plain neutral base undergarments (soft bralette/tank and plain briefs) — this is a catalog fitting base.
+${data.isInfant ? "IMAGE 1 is a baby/infant photographed top-down lying on a soft blanket, wearing a plain neutral onesie — this is a baby catalog fitting base." : "IMAGE 1 is a fitting model wearing only plain neutral base undergarments (soft bralette/tank and plain briefs) — this is a catalog fitting base."}
 IMAGE 2 is a product/reference photo for the garment only; ignore any person, skin, body, pose, or background in IMAGE 2.
 
-Edit IMAGE 1 so the model is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. ${coverageRule(data.garmentCategory)} Keep the result modest and SFW. Do not output the original unedited model image. ${data.extraInstruction || ""}
+Edit IMAGE 1 so the subject is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. ${coverageRule(data.garmentCategory)} Keep the result modest and SFW. Do not output the original unedited base image. ${data.extraInstruction || ""}
 
-${KEEP}
+${data.isInfant ? KEEP_INFANT : KEEP}
 
 Output: a single photorealistic edited image of the person wearing the new garment.`;
     console.log("[applyGarment] base=", data.baseImageUrl.slice(0, 80), "garment=", data.garmentImageUrl.slice(0, 80));
