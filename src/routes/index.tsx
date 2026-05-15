@@ -26,12 +26,16 @@ function Landing() {
   const cta = user ? { to: "/closet", label: "Open your closet" } : { to: "/login", label: "Sign in to start" };
   const heroRef = useRef<HTMLDivElement>(null);
 
-  // Latest worked-on model: prefer styled render, fallback to base.
+  // Muse: prefer the most recently saved styled look; fallback to the latest model template.
   const latestModel = useMemo(() => {
     if (!models?.length) return null;
     return [...models].sort((a, b) => b.createdAt - a.createdAt)[0];
   }, [models]);
-  const museImage = latestModel?.currentImageUrl || latestModel?.baseImageUrl || null;
+  const latestLook = useMemo(() => {
+    if (!looks?.length) return null;
+    return [...looks].sort((a, b) => b.createdAt - a.createdAt)[0];
+  }, [looks]);
+  const museImage = latestLook?.imageUrl || latestModel?.currentImageUrl || latestModel?.baseImageUrl || null;
 
   // Cursor spotlight
   const onMove = (e: React.MouseEvent) => {
