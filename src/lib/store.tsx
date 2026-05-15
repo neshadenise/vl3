@@ -38,7 +38,7 @@ export type ClosetItem = {
 export type Model = {
   id: string; name: string; prompt: string; pose: string;
   baseImageUrl: string; currentImageUrl: string; history: string[];
-  wornItemIds: string[]; createdAt: number; isChild?: boolean;
+  wornItemIds: string[]; createdAt: number; isChild?: boolean; isInfant?: boolean;
 };
 export type Look = { id: string; name: string; modelId: string; imageUrl: string; itemIds: string[]; notes?: string; createdAt: number };
 export type Collection = { id: string; name: string; description?: string; lookIds: string[]; cover?: string; createdAt: number };
@@ -81,7 +81,7 @@ type State = {
   clearTray: () => void;
 
   models: Model[];
-  addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string; isChild?: boolean }) => Promise<Model | null>;
+  addModel: (m: Omit<Model, "id" | "createdAt" | "history" | "wornItemIds" | "currentImageUrl"> & { currentImageUrl?: string; isChild?: boolean; isInfant?: boolean }) => Promise<Model | null>;
   updateModelImage: (id: string, newUrl: string, addedItemId?: string) => Promise<void>;
   resetModel: (id: string) => Promise<void>;
   undoModel: (id: string) => Promise<void>;
@@ -125,7 +125,7 @@ const mapModel = (r: any): Model => ({
   baseImageUrl: r.base_image_url, currentImageUrl: r.current_image_url,
   history: Array.isArray(r.history) ? r.history : [],
   wornItemIds: Array.isArray(r.worn_item_ids) ? r.worn_item_ids : [],
-  createdAt: new Date(r.created_at).getTime(), isChild: !!r.is_child,
+  createdAt: new Date(r.created_at).getTime(), isChild: !!r.is_child, isInfant: !!r.is_infant,
 });
 const mapLook = (r: any): Look => ({
   id: r.id, name: r.name, modelId: r.model_id || "", imageUrl: r.image_url,
@@ -336,7 +336,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from("models").insert({
       user_id: uid, name: m.name, prompt: m.prompt, pose: m.pose,
       base_image_url: m.baseImageUrl, current_image_url: current,
-      history: [], worn_item_ids: [], is_child: !!m.isChild,
+      history: [], worn_item_ids: [], is_child: !!m.isChild, is_infant: !!m.isInfant,
     }).select().single();
     if (error || !data) { console.error(error); return null; }
     const mapped = mapModel(data);
