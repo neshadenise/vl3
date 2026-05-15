@@ -9,7 +9,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
-  const { user, theme, setTheme, models } = useStudio();
+  const { user, theme, setTheme, models, looks } = useStudio();
   const THEMES = ["pastel", "astro", "nature"] as const;
   type ThemeKey = typeof THEMES[number];
   const META: Record<ThemeKey, { label: string; nextLabel: string; Icon: typeof Sun }> = {
