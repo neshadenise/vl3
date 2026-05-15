@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sparkles, Plus, Trash2, Edit3, Upload, User, Baby } from "lucide-react";
+import { Sparkles, Plus, Trash2, Edit3, Upload, User, Baby, BabyIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { generateModel } from "@/lib/ai.functions";
@@ -77,6 +77,7 @@ function CreateModelDialog() {
   const [pose, setPose] = useState(POSE_PRESETS[0]);
   const [busy, setBusy] = useState(false);
   const [isChild, setIsChild] = useState(false);
+  const [isInfant, setIsInfant] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -102,17 +103,19 @@ function CreateModelDialog() {
         modelPose = "Original photo pose";
       } else {
         if (!prompt.trim()) { toast.error("Describe your model first"); setBusy(false); return; }
-        const res = await generateModel({ data: { prompt, pose, isChild } });
+        const res = await generateModel({ data: { prompt, pose, isChild: isChild && !isInfant, isInfant } });
         if (res.error || !res.dataUrl) { toast.error(res.error || "Generation failed"); setBusy(false); return; }
         url = await uploadDataUrl(res.dataUrl, "models");
         modelPrompt = prompt;
-        modelPose = pose;
+        modelPose = isInfant ? "Top-down on blanket" : pose;
       }
 
       const model = await addModel({
         name: name || (tab === "upload" ? "My photo" : "Untitled model"),
         prompt: modelPrompt, pose: modelPose,
-        baseImageUrl: url, currentImageUrl: url, isChild: tab === "generate" ? isChild : false,
+        baseImageUrl: url, currentImageUrl: url,
+        isChild: tab === "generate" ? (isChild && !isInfant) : false,
+        isInfant: tab === "generate" ? isInfant : false,
       });
       if (!model) { toast.error("Could not save model"); setBusy(false); return; }
       toast.success(tab === "upload" ? "Photo ready ✦" : "Model generated ✦");
@@ -146,21 +149,32 @@ function CreateModelDialog() {
           </TabsList>
 
           <TabsContent value="generate" className="space-y-3 mt-3">
-            <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${isChild ? "bg-glow text-primary-foreground shadow-glow border-transparent" : "glass"}`}>
-              <input type="checkbox" className="sr-only" checked={isChild} onChange={(e) => setIsChild(e.target.checked)} />
-              <Baby className="h-4 w-4" />
-              <span className="text-sm font-medium">This is a child model</span>
-              <span className="ml-auto text-[11px] opacity-80">Modest tank top + shorts base</span>
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${isChild && !isInfant ? "bg-glow text-primary-foreground shadow-glow border-transparent" : "glass"}`}>
+                <input type="checkbox" className="sr-only" checked={isChild && !isInfant} onChange={(e) => { setIsChild(e.target.checked); if (e.target.checked) setIsInfant(false); }} />
+                <Baby className="h-4 w-4" />
+                <span className="text-sm font-medium">Child model</span>
+              </label>
+              <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${isInfant ? "bg-glow text-primary-foreground shadow-glow border-transparent" : "glass"}`}>
+                <input type="checkbox" className="sr-only" checked={isInfant} onChange={(e) => { setIsInfant(e.target.checked); if (e.target.checked) setIsChild(false); }} />
+                <BabyIcon className="h-4 w-4" />
+                <span className="text-sm font-medium">Infant / baby</span>
+              </label>
+            </div>
+            {isInfant && <p className="text-[11px] text-muted-foreground -mt-1">Infants are photographed top-down on a soft blanket in a plain onesie — for baby clothing only.</p>}
             <div>
               <label className="text-xs uppercase tracking-widest text-muted-foreground">Describe your model</label>
-              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder={isChild ? "Cheerful 7-year-old, curly brown hair, light brown skin, freckles..." : "Tall androgynous person, soft freckles, natural curls, warm olive skin..."} />
+              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4}
+                placeholder={isInfant ? "6-month-old baby, soft brown curls, warm fair skin, peaceful expression..."
+                  : isChild ? "Cheerful 7-year-old, curly brown hair, light brown skin, freckles..."
+                  : "Tall androgynous person, soft freckles, natural curls, warm olive skin..."} />
               <div className="mt-2 flex flex-wrap gap-1">
                 {MODEL_PROMPT_PRESETS.map((p) => (
                   <button key={p} type="button" onClick={() => setPrompt(p)} className="text-[10px] px-2 py-1 rounded-full glass hover:bg-accent">{p.split(",")[0]}</button>
                 ))}
               </div>
             </div>
+            {!isInfant && (
             <div>
               <label className="text-xs uppercase tracking-widest text-muted-foreground">Pose</label>
               <Select value={pose} onValueChange={setPose}>
@@ -168,7 +182,8 @@ function CreateModelDialog() {
                 <SelectContent>{POSE_PRESETS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">Models are generated in a neutral fitted base layer. As you add tops or bottoms in the studio, the base layer is replaced automatically.</p>
+            )}
+            <p className="text-xs text-muted-foreground">Your model template is always preserved in its bare base form — styling sessions in the studio create new looks instead of overwriting it.</p>
           </TabsContent>
 
           <TabsContent value="upload" className="space-y-3 mt-3">
