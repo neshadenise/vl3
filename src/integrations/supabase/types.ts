@@ -215,6 +215,7 @@ export type Database = {
           history: Json
           id: string
           is_child: boolean
+          is_infant: boolean
           name: string
           pose: string
           prompt: string
@@ -228,6 +229,7 @@ export type Database = {
           history?: Json
           id?: string
           is_child?: boolean
+          is_infant?: boolean
           name: string
           pose: string
           prompt: string
@@ -241,6 +243,7 @@ export type Database = {
           history?: Json
           id?: string
           is_child?: boolean
+          is_infant?: boolean
           name?: string
           pose?: string
           prompt?: string
