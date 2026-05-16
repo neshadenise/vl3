@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { useStudio, ClosetItem, Model } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Undo2, RotateCcw, Save, Plus, Loader2, Check, X, Wand2, Shirt, Trash } from "lucide-react";
+import { Sparkles, Undo2, RotateCcw, Save, Plus, Loader2, Check, X, Shirt, Trash } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { applyGarment, restyleLook } from "@/lib/ai.functions";
@@ -47,6 +47,7 @@ function StudioPage() {
   const [sessionWornIds, setSessionWornIds] = useState<string[]>([]);
   const [sessionLookId, setSessionLookId] = useState<string | null>(null);
   const initedFor = useRef<string>("");
+  const generatingRef = useRef(false);
 
   // Initialize session when model changes or a "look" search param is present.
   useEffect(() => {
@@ -105,48 +106,42 @@ function StudioPage() {
     );
   }
 
-  const applyOne = async (item: ClosetItem, baseUrl: string): Promise<string | null> => {
-    const res: any = await applyGarment({ data: {
-      baseImageUrl: baseUrl,
-      garmentImageUrl: item.imageUrl,
-      garmentName: item.name,
-      garmentCategory: item.category,
-      modelPrompt: model.prompt,
-      modelPose: model.pose,
-      isInfant: !!model.isInfant,
-    }});
-    if (res.error || !res.dataUrl) { toast.error(res.error || `Try-on failed: ${item.name}`, { duration: 6000 }); return null; }
-    const url = await uploadDataUrl(res.dataUrl, "looks");
-    setSessionHistory((h) => [...h, baseUrl]);
-    setSessionImage(url);
-    setSessionWornIds((w) => w.includes(item.id) ? w : [...w, item.id]);
-    return url;
-  };
-
-  // Click in closet → send to tray. Click in tray → return to closet.
-  const toggleTray = (item: ClosetItem) => {
-    if (studioTray.includes(item.id)) removeFromTray(item.id);
-    else addToTray(item.id);
-  };
-
-  const styleMe = async () => {
-    if (trayItems.length === 0) return;
+  const applyOne = async (item: ClosetItem) => {
+    if (generatingRef.current) { toast.message("Generating… please wait"); return; }
+    generatingRef.current = true;
     setBusy(true);
-    let base = sessionImage;
+    const baseUrl = sessionImage;
     try {
-      for (const it of trayItems) {
-        toast.message(`Applying ${it.name}…`);
-        const next = await applyOne(it, base);
-        if (!next) break;
-        base = next;
-      }
-      toast.success("Look styled ✦");
+      toast.message(`Applying ${item.name}…`);
+      const res: any = await applyGarment({ data: {
+        baseImageUrl: baseUrl,
+        garmentImageUrl: item.imageUrl,
+        garmentName: item.name,
+        garmentCategory: item.category,
+        garmentSubcategory: item.subcategory,
+        modelPrompt: model!.prompt,
+        modelPose: model!.pose,
+        isInfant: !!model!.isInfant,
+      }});
+      if (res.error || !res.dataUrl) { toast.error(res.error || `Try-on failed: ${item.name}`, { duration: 6000 }); return; }
+      const url = await uploadDataUrl(res.dataUrl, "looks");
+      setSessionHistory((h) => [...h, baseUrl]);
+      setSessionImage(url);
+      setSessionWornIds((w) => w.includes(item.id) ? w : [...w, item.id]);
+      toast.success(`${item.name} applied ✦`);
     } catch (e: any) { toast.error(e?.message || "Failed"); }
-    finally { setBusy(false); }
+    finally { generatingRef.current = false; setBusy(false); }
+  };
+
+  // Click closet item → send to tray (no generation). Click in tray → generate.
+  const sendToTray = (item: ClosetItem) => {
+    if (!studioTray.includes(item.id)) addToTray(item.id);
   };
 
   const restyle = async (instruction: string) => {
     if (!instruction.trim()) return;
+    if (generatingRef.current) { toast.message("Generating… please wait"); return; }
+    generatingRef.current = true;
     setBusy(true);
     try {
       const res: any = await restyleLook({ data: { baseImageUrl: sessionImage, instruction } });
@@ -157,7 +152,7 @@ function StudioPage() {
       toast.success("Restyled ✦");
       setStyleInput("");
     } catch (e: any) { console.error(e); toast.error(e?.message || "Failed"); }
-    finally { setBusy(false); }
+    finally { generatingRef.current = false; setBusy(false); }
   };
 
   const applyPose = (pose: string) =>
@@ -170,6 +165,12 @@ function StudioPage() {
       setSessionImage(prev);
       return h.slice(0, -1);
     });
+  };
+  const revertTo = (idx: number) => {
+    if (idx < 0 || idx >= sessionHistory.length) return;
+    const target = sessionHistory[idx];
+    setSessionImage(target);
+    setSessionHistory((h) => h.slice(0, idx));
   };
   const resetSession = () => {
     setSessionImage(model.baseImageUrl);
@@ -228,6 +229,25 @@ function StudioPage() {
         </div>
       </div>
 
+      {/* Generation history */}
+      {sessionHistory.length > 0 && (
+        <section className="mt-4 glass rounded-2xl p-3">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">History — click to revert</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {sessionHistory.map((url, i) => (
+              <button key={i} onClick={() => revertTo(i)} disabled={busy}
+                className="shrink-0 h-16 w-12 rounded-md overflow-hidden glass hover:shadow-glow transition disabled:opacity-50"
+                title={`Revert to step ${i + 1}`}>
+                <img src={url} alt={`v${i + 1}`} className="h-full w-full object-cover" />
+              </button>
+            ))}
+            <div className="shrink-0 h-16 w-12 rounded-md overflow-hidden ring-2 ring-primary">
+              <img src={sessionImage} alt="current" className="h-full w-full object-cover" />
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Active styling tray */}
       <section className="mt-5 glass rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -237,25 +257,29 @@ function StudioPage() {
             <span className="text-xs text-muted-foreground">({trayItems.length})</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" disabled={busy || trayItems.length === 0} onClick={styleMe} className="bg-glow text-primary-foreground shadow-glow">
-              <Wand2 className="h-3.5 w-3.5 mr-1" /> Style Me
-            </Button>
             <Button size="sm" variant="outline" disabled={busy || trayItems.length === 0} onClick={clearTray}>
               <Trash className="h-3.5 w-3.5 mr-1" /> Hang up clothes
             </Button>
           </div>
         </div>
         {trayItems.length === 0 ? (
-          <div className="text-xs text-muted-foreground">Click items in your closet to send them here. Click them again to hang them back.</div>
+          <div className="text-xs text-muted-foreground">Click items in your closet to send them here. Then click a tray item to try it on. Press × to send it back to the closet.</div>
         ) : (
           <div className="flex gap-2 flex-wrap">
             {trayItems.map((it) => (
-              <button key={it.id} onClick={() => removeFromTray(it.id)}
-                className="flex items-center gap-2 glass rounded-full pl-1 pr-2 py-1 hover:bg-accent transition group">
-                <div className="h-7 w-7 rounded-full overflow-hidden bg-dreamy"><img src={it.imageUrl} alt={it.name} className="h-full w-full object-cover" /></div>
-                <span className="text-xs">{it.name}</span>
-                <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
-              </button>
+              <div key={it.id} className="flex items-center gap-1 glass rounded-full pl-1 pr-1 py-1 hover:shadow-glow transition group">
+                <button onClick={() => applyOne(it)} disabled={busy}
+                  className="flex items-center gap-2 pr-2 disabled:opacity-50"
+                  title="Apply to model">
+                  <div className="h-7 w-7 rounded-full overflow-hidden bg-dreamy"><img src={it.imageUrl} alt={it.name} className="h-full w-full object-cover" /></div>
+                  <span className="text-xs">{it.name}</span>
+                </button>
+                <button onClick={() => removeFromTray(it.id)} disabled={busy}
+                  className="h-5 w-5 grid place-items-center rounded-full hover:bg-accent disabled:opacity-50"
+                  title="Send back to closet">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -280,7 +304,7 @@ function StudioPage() {
             {closetStripItems.map((it: ClosetItem) => {
               const worn = sessionWornIds.includes(it.id);
               return (
-                <button key={it.id} disabled={busy} onClick={() => toggleTray(it)}
+                <button key={it.id} disabled={busy} onClick={() => sendToTray(it)}
                   className={cn("group shrink-0 w-24 text-left rounded-xl glass overflow-hidden hover:shadow-glow transition", busy && "opacity-50")}>
                   <div className="aspect-square bg-dreamy relative">
                     <img src={it.imageUrl} className="h-full w-full object-cover" alt={it.name} />

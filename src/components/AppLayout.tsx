@@ -3,6 +3,7 @@ import { Moon, Sparkles, LayoutDashboard, Shirt, Wand2, UserRound, BookHeart, La
 import { useState } from "react";
 import { useStudio } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { CreditsPill } from "@/components/CreditsPill";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -39,6 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="font-display text-lg tracking-tight">Virtual<span className="text-gradient"> Lookbook</span></span>
           </Link>
           <div className="flex items-center gap-2">
+            <CreditsPill />
             <ThemeToggle theme={theme} setTheme={setTheme} />
             <button onClick={() => setOpen((v) => !v)} aria-label="Menu" className="h-9 w-9 grid place-items-center rounded-full glass">
               {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -73,7 +75,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="mt-2 flex items-center justify-between px-2">
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Studio</span>
-            <ThemeToggle theme={theme} setTheme={setTheme} />
+            <div className="flex items-center gap-2">
+              <CreditsPill />
+              <ThemeToggle theme={theme} setTheme={setTheme} />
+            </div>
           </div>
 
           <nav className="flex-1 flex flex-col gap-1 mt-1">
