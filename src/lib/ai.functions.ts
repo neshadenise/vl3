@@ -1,195 +1,204 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { hasCredits, consumeCreditFor } from "./credits.server";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
-const IMAGE_MODEL_FALLBACKS = [
-  "google/gemini-3.1-flash-image-preview",
-  "google/gemini-3-pro-image-preview",
-];
 const TEXT_MODEL = "google/gemini-2.5-flash";
 
-// Convert any https/http image URL into a base64 data URL.
-// Gemini sometimes rejects external URLs with "unsupported image format" / 400.
-// Sending the bytes inline is the most reliable path.
+// ============================================================
+// OpenAI gpt-image-1 pipeline
+// ============================================================
+const OPENAI_BASE = "https://api.openai.com/v1";
+const OPENAI_IMAGE_MODEL = "gpt-image-1";
+
+async function urlToFile(url: string, name: string): Promise<File> {
+  let blob: Blob;
+  if (url.startsWith("data:image/")) {
+    const [meta, b64] = url.split(",");
+    const mime = meta.match(/:(.*?);/)?.[1] || "image/png";
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    blob = new Blob([arr], { type: mime });
+  } else {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`Could not fetch reference image (${r.status})`);
+    const buf = await r.arrayBuffer();
+    let ct = r.headers.get("content-type") || "image/png";
+    if (!ct.startsWith("image/")) ct = "image/png";
+    blob = new Blob([buf], { type: ct });
+  }
+  const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+  return new File([blob], `${name}.${ext}`, { type: blob.type });
+}
+
+function b64ToDataUrl(b64: string, mime = "image/png") {
+  return `data:${mime};base64,${b64}`;
+}
+
+type ImageResult = { dataUrl?: string; error?: string };
+
+async function openaiGenerate(prompt: string, size = "1024x1536"): Promise<ImageResult> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return { error: "OPENAI_API_KEY not configured" };
+  const res = await fetch(`${OPENAI_BASE}/images/generations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, size, n: 1, quality: "high" }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error("[openai gen]", res.status, body.slice(0, 500));
+    if (res.status === 429) return { error: "OpenAI rate limit hit. Try again shortly." };
+    if (res.status === 401) return { error: "OpenAI key invalid." };
+    return { error: `OpenAI error (${res.status}): ${body.slice(0, 200)}` };
+  }
+  const j: any = await res.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) return { error: "OpenAI returned no image." };
+  return { dataUrl: b64ToDataUrl(b64) };
+}
+
+async function openaiEdit(prompt: string, imageUrls: string[], size = "1024x1536"): Promise<ImageResult> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return { error: "OPENAI_API_KEY not configured" };
+  const fd = new FormData();
+  fd.append("model", OPENAI_IMAGE_MODEL);
+  fd.append("prompt", prompt);
+  fd.append("size", size);
+  fd.append("n", "1");
+  fd.append("quality", "high");
+  try {
+    for (let i = 0; i < imageUrls.length; i++) {
+      const file = await urlToFile(imageUrls[i], `ref_${i}`);
+      fd.append("image[]", file);
+    }
+  } catch (e: any) {
+    return { error: e?.message || "Could not load reference image" };
+  }
+  const res = await fetch(`${OPENAI_BASE}/images/edits`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error("[openai edit]", res.status, body.slice(0, 500));
+    if (res.status === 429) return { error: "OpenAI rate limit hit. Try again shortly." };
+    if (res.status === 401) return { error: "OpenAI key invalid." };
+    return { error: `OpenAI error (${res.status}): ${body.slice(0, 200)}` };
+  }
+  const j: any = await res.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) return { error: "OpenAI returned no image." };
+  return { dataUrl: b64ToDataUrl(b64) };
+}
+
 async function toDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:image/")) return url;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Could not fetch image (${r.status})`);
   let ct = r.headers.get("content-type") || "image/jpeg";
   if (!ct.startsWith("image/")) ct = "image/jpeg";
-  // Gemini supports png/jpeg/webp/heic. Coerce unknowns to jpeg.
   if (!/^image\/(png|jpe?g|webp|heic|heif|gif)$/i.test(ct)) ct = "image/jpeg";
   const buf = await r.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  // Chunked base64 to avoid stack overflow on large images.
-  const CHUNK = 8192;
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
-  }
-  const b64 = typeof Buffer !== "undefined" ? Buffer.from(buf).toString("base64") : btoa(bin);
+  const b64 = typeof Buffer !== "undefined" ? Buffer.from(buf).toString("base64") : "";
   return `data:${ct};base64,${b64}`;
 }
 
-async function normalizeContent(content: any): Promise<any> {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return content;
-  const out = [];
-  for (const part of content) {
-    if (part?.type === "image_url" && part?.image_url?.url) {
-      try {
-        const dataUrl = await toDataUrl(part.image_url.url);
-        out.push({ type: "image_url", image_url: { url: dataUrl } });
-      } catch (e) {
-        console.error("[ai] image fetch failed", e);
-        throw e;
-      }
-    } else {
-      out.push(part);
-    }
+/** Charge the user one credit only after a successful generation. */
+async function withCredit<T extends ImageResult>(userId: string, fn: () => Promise<T>): Promise<T> {
+  if (!(await hasCredits(userId, 1))) {
+    return { error: "Out of credits. Top up in Workspace settings." } as T;
   }
-  return out;
-}
-
-function extractImageUrl(data: any): string | undefined {
-  const msg = data?.choices?.[0]?.message;
-  if (!msg) return undefined;
-  // Shape 1: message.images[]
-  const fromImages = msg?.images?.[0]?.image_url?.url || msg?.images?.[0]?.url;
-  if (typeof fromImages === "string" && fromImages.startsWith("data:image/")) return fromImages;
-  // Shape 2: message.content can be a string OR an array of parts
-  if (Array.isArray(msg.content)) {
-    for (const part of msg.content) {
-      const u = part?.image_url?.url || part?.image_url;
-      if (typeof u === "string" && u.startsWith("data:image/")) return u;
-    }
+  const res = await fn();
+  if (res?.dataUrl && !res.error) {
+    try { await consumeCreditFor(userId, 1); } catch (e) { console.error("[credit] consume failed", e); }
   }
-  return undefined;
-}
-
-function extractText(data: any): string | undefined {
-  const msg = data?.choices?.[0]?.message;
-  if (!msg) return undefined;
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.content)) {
-    return msg.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join(" ").trim() || undefined;
-  }
-  return undefined;
-}
-
-async function callImageAIOnce(model: string, content: any): Promise<{ dataUrl?: string; error?: string; textReply?: string }> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) return { error: "LOVABLE_API_KEY not configured" };
-
-  let normalized: any;
-  try {
-    normalized = await normalizeContent(content);
-  } catch (e: any) {
-    return { error: e?.message || "Could not load reference image" };
-  }
-
-  const res = await fetch(GATEWAY, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: normalized }],
-      modalities: ["image", "text"],
-    }),
-  });
-
-  if (!res.ok) {
-    if (res.status === 429) return { error: "Rate limit hit, please wait a moment." };
-    if (res.status === 402) return { error: "AI credits exhausted. Add credits in workspace settings." };
-    const body = await res.text();
-    console.error("AI error", model, res.status, body.slice(0, 500));
-    return { error: `AI error (${res.status}): ${body.slice(0, 200)}` };
-  }
-
-  const data = await res.json();
-  const url = extractImageUrl(data);
-  const textReply = extractText(data);
-  if (!url) {
-    console.error("AI returned no image", model, JSON.stringify(data).slice(0, 1200));
-    return { error: textReply ? `AI declined: ${textReply.slice(0, 180)}` : "AI returned no image.", textReply };
-  }
-  return { dataUrl: url };
-}
-
-async function callImageAI(content: any): Promise<{ dataUrl?: string; error?: string }> {
-  let lastErr: string | undefined;
-  const tried = [IMAGE_MODEL, ...IMAGE_MODEL_FALLBACKS];
-  for (const m of tried) {
-    const r = await callImageAIOnce(m, content);
-    if (r.dataUrl) return r;
-    lastErr = r.error || lastErr;
-    console.warn("[ai] model", m, "returned no image, trying next");
-  }
-  return { error: lastErr || "AI returned no image. Try a different prompt." };
+  return res;
 }
 
 const FRAMING = `FULL BODY shot from the very top of the head to the soles of both feet, both feet fully visible inside the frame, generous headroom and footroom, vertical 3:4 portrait orientation, the subject occupies roughly 80% of the frame height and is centered, ABSOLUTELY NO cropping of head, hands, or feet.`;
 
-const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing only basic plain neutral undergarments (a simple unbranded soft-cotton bralette or fitted tank-style undershirt and matching plain mid-rise briefs / boxer-briefs in a neutral nude or soft gray tone). This is a fitting base photo for catalog use, similar to a department-store fitting reference. Tasteful, modest, and SFW. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
+const BASE_PROMPT = `Photorealistic editorial fashion lookbook photograph, modest and SFW. ${FRAMING} Single subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, high detail skin texture, natural human proportions, looking confidently at camera. The subject is wearing only basic plain neutral undergarments (a simple unbranded soft-cotton bralette or fitted tank-style undershirt and matching plain mid-rise briefs / boxer-briefs in a neutral nude or soft gray tone). This is a fitting base photo for catalog use. Tasteful, modest, and SFW. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
 
-const CHILD_BASE_PROMPT = `Photorealistic editorial children's lookbook photograph, fully modest, age-appropriate and SFW. ${FRAMING} Single child subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, natural proportions, calm friendly expression. The child is wearing a simple plain fitted cotton tank top and modest knee-length athletic shorts in a neutral soft gray or sand tone — fully covering torso and upper legs (NO underwear-only, NO swimwear, NO bare midriff, NO bare thighs above the knee). This is a fitting base photo for a kids' catalog. Tasteful, modest, age-appropriate, no sexualization, no makeup, no jewelry. Keep the background clean and minimal so the subject can later be dressed in different garments.`;
-
-
+const CHILD_BASE_PROMPT = `Photorealistic editorial children's lookbook photograph, fully modest, age-appropriate and SFW. ${FRAMING} Single child subject centered on a neutral seamless studio backdrop (soft warm gray), soft diffused studio lighting, sharp focus, natural proportions, calm friendly expression. The child is wearing a simple plain fitted cotton tank top and modest knee-length athletic shorts in a neutral soft gray or sand tone — fully covering torso and upper legs (NO underwear-only, NO swimwear, NO bare midriff, NO bare thighs above the knee). This is a fitting base photo for a kids' catalog. Tasteful, modest, age-appropriate, no sexualization, no makeup, no jewelry.`;
 
 const INFANT_FRAMING = `Top-down (overhead) photograph looking straight down at the infant lying flat on a soft neutral blanket. The entire baby from head to toes is fully inside the frame with generous margin, vertical 3:4 orientation, infant centered, no cropping of head, hands, or feet.`;
 
 const INFANT_BASE_PROMPT = `Photorealistic editorial baby/infant catalog photograph, fully modest, age-appropriate and SFW. ${INFANT_FRAMING} Single calm infant lying on their back on a soft cream or oatmeal knit blanket, neutral seamless backdrop, soft diffused natural light, sharp focus, gentle peaceful expression. The infant is wearing a plain neutral short-sleeve cotton onesie/bodysuit in a soft natural tone, fully covering torso and diaper area. NO bare diaper, NO underwear-only, NO swimwear, NO suggestive posing. Hands and feet visible and relaxed. This is a fitting base photo for a baby clothing catalog so the infant can later be dressed in different baby garments.`;
 
-const KEEP_INFANT = `Preserve the infant's face, body proportions, skin tone, hair, pose, blanket, lighting, and the soft neutral backdrop. Maintain ${INFANT_FRAMING} Photorealistic editorial baby catalog style, fully modest, age-appropriate, SFW, no collage artifacts. Render the garment ACCURATELY on the infant: copy the garment color, fabric, print, neckline, sleeves, and silhouette faithfully. Do not sexualize or restyle the baby; focus only on rendering the clothing correctly.`;
-
-export const generateModel = createServerFn({ method: "POST" })
-  .inputValidator((d: { prompt: string; pose?: string; isChild?: boolean; isInfant?: boolean }) =>
-    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional(), isChild: z.boolean().optional(), isInfant: z.boolean().optional() }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    const base = data.isInfant ? INFANT_BASE_PROMPT : data.isChild ? CHILD_BASE_PROMPT : BASE_PROMPT;
-    const poseLine = data.isInfant
-      ? "Pose: infant lying calmly on back, top-down camera angle."
-      : (data.pose ? `Pose: ${data.pose}.` : "Pose: standing neutral, arms relaxed at sides.");
-    const prompt = `${base}\n\nSubject description: ${data.prompt}.\n${poseLine}`;
-    return callImageAI(prompt);
-  });
+const KEEP_INFANT = `Preserve the infant's face, body proportions, skin tone, hair, pose, blanket, lighting, and the soft neutral backdrop. Maintain ${INFANT_FRAMING} Photorealistic editorial baby catalog style, fully modest, age-appropriate, SFW, no collage artifacts. Render the garment ACCURATELY on the infant.`;
 
 const KEEP = `Preserve the model's face, body shape, skin tone, hair, pose, lighting, and the studio background. Maintain ${FRAMING} Photorealistic editorial catalog style, modest and SFW, seamless, no collage artifacts.`;
 
-function coverageRule(category: string) {
-  const c = category.toLowerCase();
-  if (c.includes("top") || c.includes("jacket"))
-    return "The new top fully replaces any existing upper-body undergarment in the area it covers — no base bralette/undershirt should remain visible underneath where the garment covers. Keep the lower-body briefs unchanged.";
-  if (c.includes("bottom"))
-    return "The new bottoms fully replace the base briefs/boxer-briefs in the area they cover — no base underwear should remain visible underneath where the garment covers. Keep the upper-body base layer unchanged.";
-  if (c.includes("dress"))
-    return "The dress fully replaces the existing base undergarments in the area it covers (both top and bottom).";
-  if (c.includes("swim") || c.includes("lingerie"))
-    return "The new piece replaces the corresponding base undergarment in the area it covers.";
-  return "Layer the item naturally over the base undergarments without removing modest coverage in uncovered areas.";
-}
+const IDENTITY = `Preserve EXACTLY the person's face, identity, ethnicity, body proportions, skin tone, hair, hands, and pose unless explicitly instructed otherwise. Photorealistic fashion-editorial photography, soft studio lighting, magazine-quality fabric rendering.`;
 
-function garmentPlacement(category: string) {
-  const c = category.toLowerCase();
-  if (c.includes("top") || c.includes("jacket")) return "upper body garment covering the chest and torso";
-  if (c.includes("bottom")) return "lower body garment covering the waist, hips, and legs as appropriate";
-  if (c.includes("dress")) return "full outfit garment covering the torso and lower body";
-  if (c.includes("shoe")) return "footwear placed on both feet";
-  return "fashion item placed naturally on the matching body area";
+const SKIN_BLEND = `Blend skin smoothly at every exposed garment edge (neckline, sleeves, hem, waistline, ankles, wrists). Match the person's existing skin tone, undertones, lighting, and shadows. No hard seams, no color banding, no mismatched skin patches where skin meets fabric.`;
+
+// Garment slot system: prevents top from wiping pants, shoes from wiping dress, etc.
+type Slot = "top" | "bottom" | "dress" | "outer" | "shoes" | "hat" | "accessory" | "swim" | "lingerie";
+function slotFor(category: string, subcategory?: string): Slot {
+  const c = `${category} ${subcategory || ""}`.toLowerCase();
+  if (/dress|jumpsuit|romper|gown/.test(c)) return "dress";
+  if (/jacket|coat|blazer|cardigan|outer/.test(c)) return "outer";
+  if (/swim|bikini/.test(c)) return "swim";
+  if (/lingerie|underwear/.test(c)) return "lingerie";
+  if (/shoe|boot|sneaker|sandal|heel|footwear/.test(c)) return "shoes";
+  if (/hat|cap|beanie|headwear/.test(c)) return "hat";
+  if (/bag|jewelry|belt|scarf|sunglass|tie|glove|sock|accessor/.test(c)) return "accessory";
+  if (/bottom|pant|jean|skirt|short|trouser|legging/.test(c)) return "bottom";
+  return "top";
+}
+const SLOT_REGION: Record<Slot, string> = {
+  top: "upper body (chest, torso, arms as appropriate)",
+  bottom: "lower body (waist, hips, legs)",
+  dress: "full torso AND lower body as a single garment",
+  outer: "outermost upper layer over any existing top",
+  shoes: "both feet",
+  hat: "head only",
+  accessory: "the natural body area for this accessory",
+  swim: "the area normally covered by swimwear",
+  lingerie: "the area normally covered by lingerie",
+};
+function keepOtherSlots(thisSlot: Slot): string {
+  const all: Slot[] = ["top","bottom","outer","shoes","hat","accessory"];
+  const keep = all.filter((s) => {
+    if (s === thisSlot) return false;
+    if (thisSlot === "dress" && (s === "top" || s === "bottom")) return false;
+    return true;
+  });
+  if (keep.length === 0) return "";
+  return `Do NOT change or remove any other garments on the subject (keep their current ${keep.join(", ")} exactly as-is, including color, pattern, fit, and texture).`;
 }
 
 function isFetchableUrl(u: string) {
   return u.startsWith("https://") || u.startsWith("http://") || u.startsWith("data:image/");
 }
 
+export const generateModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { prompt: string; pose?: string; isChild?: boolean; isInfant?: boolean }) =>
+    z.object({ prompt: z.string().min(2).max(500), pose: z.string().max(80).optional(), isChild: z.boolean().optional(), isInfant: z.boolean().optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const base = data.isInfant ? INFANT_BASE_PROMPT : data.isChild ? CHILD_BASE_PROMPT : BASE_PROMPT;
+    const poseLine = data.isInfant
+      ? "Pose: infant lying calmly on back, top-down camera angle."
+      : (data.pose ? `Pose: ${data.pose}.` : "Pose: standing neutral, arms relaxed at sides.");
+    const prompt = `${base}\n\nSubject description: ${data.prompt}.\n${poseLine}\n\n${IDENTITY}\n${SKIN_BLEND}`;
+    return withCredit(context.userId, () => openaiGenerate(prompt));
+  });
+
 export const applyGarment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     baseImageUrl: string;
     garmentImageUrl: string;
     garmentName: string;
     garmentCategory: string;
+    garmentSubcategory?: string;
     modelPrompt?: string;
     modelPose?: string;
     extraInstruction?: string;
@@ -200,57 +209,56 @@ export const applyGarment = createServerFn({ method: "POST" })
       garmentImageUrl: z.string().min(5),
       garmentName: z.string().max(120),
       garmentCategory: z.string().max(60),
+      garmentSubcategory: z.string().max(60).optional(),
       modelPrompt: z.string().max(500).optional(),
       modelPose: z.string().max(80).optional(),
       extraInstruction: z.string().max(400).optional(),
       isInfant: z.boolean().optional(),
     }).parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     if (!isFetchableUrl(data.baseImageUrl)) return { error: "Model image URL is not fetchable. Regenerate the model." };
     if (!isFetchableUrl(data.garmentImageUrl)) return { error: "Garment image URL is not fetchable. Re-upload the item." };
 
-    const text = `Create one safe fashion catalog virtual try-on image.
+    const slot = slotFor(data.garmentCategory, data.garmentSubcategory);
+    const region = SLOT_REGION[slot];
+    const layering = keepOtherSlots(slot);
 
-${data.isInfant ? "IMAGE 1 is a baby/infant photographed top-down lying on a soft blanket, wearing a plain neutral onesie — this is a baby catalog fitting base." : "IMAGE 1 is a fitting model wearing only plain neutral base undergarments (soft bralette/tank and plain briefs) — this is a catalog fitting base."}
-IMAGE 2 is a product/reference photo for the garment only; ignore any person, skin, body, pose, or background in IMAGE 2.
+    const baseDesc = data.isInfant
+      ? "IMAGE 1 is a baby/infant photographed top-down lying on a soft blanket — this is the live fitting subject."
+      : "IMAGE 1 is the live fitting subject — preserve their face, identity, body, and current outfit exactly.";
 
-Edit IMAGE 1 so the subject is wearing the garment from IMAGE 2: "${data.garmentName}" (${data.garmentCategory}), as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. ${coverageRule(data.garmentCategory)} Keep the result modest and SFW. Do not output the original unedited base image. ${data.extraInstruction || ""}
+    const prompt = `Create one safe photorealistic fashion catalog virtual try-on edit.
+
+${baseDesc}
+IMAGE 2 is a product/reference photo for the garment ONLY — ignore any person, body, skin, pose, or background in IMAGE 2; use it only as a reference for the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette.
+
+Edit IMAGE 1 so the subject is wearing "${data.garmentName}" (${data.garmentCategory}${data.garmentSubcategory ? `, ${data.garmentSubcategory}` : ""}) on the ${region}. Copy the garment from IMAGE 2 faithfully. ${layering}
 
 ${data.isInfant ? KEEP_INFANT : KEEP}
+${IDENTITY}
+${SKIN_BLEND}
 
-Output: a single photorealistic edited image of the person wearing the new garment.`;
-    console.log("[applyGarment] base=", data.baseImageUrl.slice(0, 80), "garment=", data.garmentImageUrl.slice(0, 80));
-    const edited = await callImageAI([
-      { type: "text", text },
-      { type: "image_url", image_url: { url: data.baseImageUrl } },
-      { type: "image_url", image_url: { url: data.garmentImageUrl } },
-    ]);
-    if (edited.dataUrl || !data.modelPrompt) return edited;
+Modest, SFW, photorealistic, no collage artifacts. ${data.extraInstruction || ""}
 
-    const fallbackText = `Create one safe photorealistic fashion catalog image. ${FRAMING}
+Output: a single edited image of the same subject now wearing the new garment in the correct slot, with every other garment preserved.`;
 
-Subject description: ${data.modelPrompt}.
-Pose: ${data.modelPose || "standing neutral, arms relaxed at sides"}.
-
-Use the attached product/reference image as the garment reference only. Ignore any person, body, skin, pose, or background in that reference. Dress the subject in "${data.garmentName}" (${data.garmentCategory}) as a ${garmentPlacement(data.garmentCategory)}. Copy the garment's color, fabric, print, neckline, sleeves, lacing, buttons, trims, and silhouette. Keep the outfit fully clothed, modest, and SFW; add neutral fitted coverage underneath only where needed. Neutral seamless studio backdrop, soft diffused light, editorial catalog styling.`;
-    console.warn("[applyGarment] edit returned no image, regenerating dressed model from garment reference");
-    return callImageAI([
-      { type: "text", text: fallbackText },
-      { type: "image_url", image_url: { url: data.garmentImageUrl } },
-    ]);
+    console.log("[applyGarment] slot=", slot);
+    return withCredit(context.userId, () => openaiEdit(prompt, [data.baseImageUrl, data.garmentImageUrl]));
   });
 
 export const restyleLook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { baseImageUrl: string; instruction: string }) =>
     z.object({ baseImageUrl: z.string().min(5), instruction: z.string().min(2).max(400) }).parse(d),
   )
-  .handler(async ({ data }) => {
-    const text = `Adjust the styling of the outfit in this image: ${data.instruction}. Do not add or remove garments unless explicitly asked. ${KEEP}`;
-    return callImageAI([
-      { type: "text", text },
-      { type: "image_url", image_url: { url: data.baseImageUrl } },
-    ]);
+  .handler(async ({ data, context }) => {
+    const prompt = `Adjust the styling of the outfit in this image: ${data.instruction}.
+
+Do not add or remove garments unless explicitly asked. ${KEEP}
+${IDENTITY}
+${SKIN_BLEND}`;
+    return withCredit(context.userId, () => openaiEdit(prompt, [data.baseImageUrl]));
   });
 
 const ALLOWED_CATEGORIES = [
@@ -271,7 +279,6 @@ export const analyzeGarment = createServerFn({ method: "POST" })
     if (!key) return { error: "LOVABLE_API_KEY not configured" };
     if (!isFetchableUrl(data.imageUrl)) return { error: "Image URL not fetchable" };
 
-    // Normalize to data URL — Gateway often rejects external image URLs with 400.
     let imageForAi: string;
     try { imageForAi = await toDataUrl(data.imageUrl); }
     catch (e: any) { return { error: e?.message || "Could not load image" }; }
@@ -284,18 +291,18 @@ export const analyzeGarment = createServerFn({ method: "POST" })
       : "";
 
     const sys = `You are a fashion product cataloger. Look at the garment/accessory image AND any user-provided hints, then return a compact JSON object with these fields:
-- name: short descriptive product name (e.g. "Black lace corset top")
+- name: short descriptive product name
 - category: MUST be one of: ${ALLOWED_CATEGORIES.join(", ")}
-- subcategory: a more specific type within the category (e.g. "Crop top", "Wide-leg jeans", "Sneakers")
-- brand: visible brand from logo/text, or "" if none
+- subcategory: a more specific type within the category
+- brand: visible brand from logo/text, or ""
 - color: single dominant color word
-- material: primary fabric/material if visible (e.g. "cotton", "leather"), or ""
+- material: primary fabric/material if visible, or ""
 - gender: one of "Femme", "Masc", "Androgynous", "Unisex", "Kids", "Other"
 - season: an array of one or more of "Spring", "Summer", "Fall", "Winter", "All-season"
 - price: estimated retail price as a number in USD, or null if you cannot tell
-- tags: 3-6 lowercase style tags, e.g. ["lace","goth","corset"]
+- tags: 3-6 lowercase style tags
 Use any user hints below as ground truth — do not contradict them; fill the rest from the image.
-Hints prefixed "canonical_" come from the official product page/URL and are ABSOLUTE TRUTH — never override or reword them.
+Hints prefixed "canonical_" come from the official product page/URL and are ABSOLUTE TRUTH.
 Respond ONLY with valid JSON, no markdown.`;
 
     const userText = hintLines
@@ -373,8 +380,6 @@ export const mirrorRemoteImage = createServerFn({ method: "POST" })
     }
   });
 
-// Fetch a product page and extract canonical info from meta tags + JSON-LD.
-// Used as ground truth that overrides AI vision guesses.
 export const fetchProductInfo = createServerFn({ method: "POST" })
   .inputValidator((d: { url: string }) => z.object({ url: z.string().url() }).parse(d))
   .handler(async ({ data }) => {
@@ -413,7 +418,6 @@ export const fetchProductInfo = createServerFn({ method: "POST" })
       if (price && !isNaN(Number(price))) result.price = Number(price);
       if (desc)  result.description = desc.slice(0, 400);
 
-      // JSON-LD Product schema
       const ldMatches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
       for (const m of ldMatches) {
         try {
@@ -433,7 +437,7 @@ export const fetchProductInfo = createServerFn({ method: "POST" })
             if (p && !result.price && !isNaN(Number(p))) result.price = Number(p);
             if (it.category && !result.subcategory) result.subcategory = String(it.category).slice(0, 60);
           }
-        } catch { /* ignore bad JSON-LD */ }
+        } catch { /* ignore */ }
       }
 
       return { info: result };
